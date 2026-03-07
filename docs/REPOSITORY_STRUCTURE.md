@@ -24,6 +24,9 @@
 - `docs/PROJECT_INTRODUCTION.md`: bilingual project introduction
 - `docs/ROADMAP.md`: phased development plan
 - `docs/DECISIONS.md`: key architecture decisions
+- `docs/ABOUT_SNIPPETS.md`: GitHub About text and topic suggestions
+- `docs/i18n/en/`: English documentation set
+- `docs/i18n/zh-CN/`: Chinese documentation set
 
 ## Supporting assets
 

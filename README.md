@@ -8,7 +8,10 @@
 ### English
 `qt-llmlite` is a lightweight local-LLM integration library for Qt developers. It provides a Qt/C++ native client with a provider abstraction to quickly connect to Ollama, vLLM, and other OpenAI-compatible endpoints. The project can be used either as a standalone Qt package or integrated directly at source level into existing applications, enabling fast local model adoption with minimal refactoring cost.
 
-See: `docs/PROJECT_INTRODUCTION.md`
+## Language Docs
+- English docs: `docs/i18n/en/`
+- ÖÐÎÄÎÄµµ£º`docs/i18n/zh-CN/`
+- About snippets: `docs/ABOUT_SNIPPETS.md`
 
 ## Goals
 
