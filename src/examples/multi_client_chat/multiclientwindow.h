@@ -65,7 +65,7 @@ private:
     QPushButton *m_newSessionButton;
 
     QTextEdit *m_output;
-    QLineEdit *m_input;
+    QTextEdit *m_input;
     QPushButton *m_sendButton;
 
     QComboBox *m_providerCombo;

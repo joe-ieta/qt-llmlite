@@ -118,7 +118,7 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     , m_sessionList(new QListWidget(this))
     , m_newSessionButton(new QPushButton(QStringLiteral("新建会话"), this))
     , m_output(new QTextEdit(this))
-    , m_input(new QLineEdit(this))
+    , m_input(new QTextEdit(this))
     , m_sendButton(new QPushButton(QStringLiteral("发送"), this))
     , m_providerCombo(new QComboBox(this))
     , m_baseUrlEdit(new QLineEdit(this))
@@ -138,8 +138,8 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
 {
     m_factory->setRepository(m_repository);
 
-    m_output->setReadOnly(true);
     m_systemPromptEdit->setPlaceholderText(QStringLiteral("系统提示词"));
+    m_output->setReadOnly(true);
     m_input->setPlaceholderText(QStringLiteral("输入消息"));
     m_apiKeyEdit->setEchoMode(QLineEdit::Password);
     m_modelCombo->setEditable(false);
@@ -562,7 +562,7 @@ void MultiClientWindow::onSendClicked()
         return;
     }
 
-    const QString prompt = m_input->text().trimmed();
+    const QString prompt = m_input->toPlainText().trimmed();
     if (prompt.isEmpty()) {
         return;
     }
