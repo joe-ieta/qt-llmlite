@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<externaltool id="QtLLM.Refactor">
+  <description>Refactor selected code via OpenAI-compatible local LLM</description>
+  <displayname>qt-llm: Refactor Selection</displayname>
+  <category>qt-llm</category>
+  <order>2</order>
+  <executable>qt-llm</executable>
+  <arguments>--task refactor</arguments>
+  <input>CurrentSelection</input>
+  <output>ShowInPane</output>
+</externaltool>
+
+<contexts>
+  <context>Editor</context>
+</contexts>

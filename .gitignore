@@ -1,0 +1,41 @@
+# Qt/qmake build outputs
+build/
+**/build-*/
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.pro.user
+*.pro.user.*
+Makefile*
+.moc/
+qrc_*.cpp
+moc_*.cpp
+ui_*.h
+
+# Qt Creator
+CMakeLists.txt.user
+*.autosave
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

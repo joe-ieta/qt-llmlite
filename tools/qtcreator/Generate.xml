@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<externaltool id="QtLLM.Generate">
+  <description>Generate code from prompt (+ optional selection as context)</description>
+  <displayname>qt-llm: Generate (Prompt + Selection)</displayname>
+  <category>qt-llm</category>
+  <order>3</order>
+  <executable>qt-llm</executable>
+  <arguments>--task generate --extra %{Prompt:Describe what you want}</arguments>
+  <input>CurrentSelection</input>
+  <output>ShowInPane</output>
+</externaltool>
+
+<contexts>
+  <context>Editor</context>
+</contexts>
