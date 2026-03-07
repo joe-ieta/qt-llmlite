@@ -17,7 +17,6 @@
   - `network/`: HTTP execution layer
   - `streaming/`: chunk/token parser
 - `src/examples/simple_chat/`: minimal Qt Widgets integration example
-- `src/qt_llm/`: optional Python CLI bridge for Qt Creator external tools
 
 ## Documentation
 
@@ -30,6 +29,4 @@
 
 ## Supporting assets
 
-- `scripts/`: helper setup scripts
-- `tools/qtcreator/`: Qt Creator External Tool templates
 - `.github/`: issue and PR templates

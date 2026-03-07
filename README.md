@@ -27,8 +27,6 @@
 - `src/qtllm`: C++ Qt library core (`QtLLMClient`, providers, networking, streaming parser)
 - `src/examples/simple_chat`: minimal Qt Widgets chat example
 - `docs`: roadmap, decisions, and project introduction
-- `tools/qtcreator`: Qt Creator External Tool templates
-- `src/qt_llm`: optional Python CLI bridge for Qt Creator tooling
 
 ## Build (qmake)
 
@@ -58,12 +56,9 @@ mingw32-make
 qt-llm/
   .github/
   docs/
-  scripts/
   src/
     examples/simple_chat/
     qtllm/
-    qt_llm/
-  tools/qtcreator/
   qt-llm.pro
 ```
 

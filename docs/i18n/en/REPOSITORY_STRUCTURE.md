@@ -1,7 +1,7 @@
 # REPOSITORY_STRUCTURE / �ֿ�ṹ
 
 ## Summary / ժҪ
-Directory-level map for source, documentation, tooling, and contributor assets.
+Directory-level map for source, documentation, and contributor assets.
 
 ## Top Level
 - `README.md`
@@ -14,16 +14,14 @@ Directory-level map for source, documentation, tooling, and contributor assets.
 ## Source
 - `src/qtllm/`: C++ core library
 - `src/examples/simple_chat/`: example app
-- `src/qt_llm/`: optional Python CLI bridge
 
 ## Documentation
 - `docs/PROJECT_INTRODUCTION.md`
 - `docs/ROADMAP.md`
 - `docs/DECISIONS.md`
+- `docs/ABOUT_SNIPPETS.md`
 - `docs/i18n/en/`
 - `docs/i18n/zh-CN/`
 
 ## Supporting Assets
-- `scripts/`
-- `tools/qtcreator/`
 - `.github/`
