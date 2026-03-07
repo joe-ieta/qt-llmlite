@@ -21,6 +21,8 @@
 ## Documentation
 
 - `docs/PROJECT_INTRODUCTION.md`: bilingual project introduction
+- `PROJECT_SPEC.md`: requirements and status baseline
+- `docs/DELIVERY_INTEGRATION.md`: deliverables and integration guide
 - `docs/ROADMAP.md`: phased development plan
 - `docs/DECISIONS.md`: key architecture decisions
 - `docs/ABOUT_SNIPPETS.md`: GitHub About text and topic suggestions

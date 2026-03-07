@@ -17,6 +17,8 @@ Directory-level map for source, documentation, and contributor assets.
 
 ## Documentation
 - `docs/PROJECT_INTRODUCTION.md`
+- `PROJECT_SPEC.md`
+- `docs/DELIVERY_INTEGRATION.md`
 - `docs/ROADMAP.md`
 - `docs/DECISIONS.md`
 - `docs/ABOUT_SNIPPETS.md`

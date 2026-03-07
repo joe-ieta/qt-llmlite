@@ -25,6 +25,7 @@ HEADERS += \
     providers/illmprovider.h \
     providers/openaicompatibleprovider.h \
     providers/ollamaprovider.h \
+    providers/providerfactory.h \
     providers/vllmprovider.h \
     network/httpexecutor.h \
     streaming/streamchunkparser.h
@@ -33,6 +34,7 @@ SOURCES += \
     core/qtllmclient.cpp \
     providers/openaicompatibleprovider.cpp \
     providers/ollamaprovider.cpp \
+    providers/providerfactory.cpp \
     providers/vllmprovider.cpp \
     network/httpexecutor.cpp \
     streaming/streamchunkparser.cpp

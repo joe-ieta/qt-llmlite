@@ -1,74 +1,76 @@
 # PROJECT_SPEC / 项目规格
 
-## Summary / 摘要
-This document defines the scope, goals, architecture direction, and phased delivery plan for qt-llmlite.
+## 摘要 / Summary
+This document defines scope, architecture direction, and current implementation status for qt-llmlite.
 
 ## 1. Project Overview
 - Name: qt-llmlite (qt-llm)
-- Purpose: provide a lightweight Qt/C++ toolkit for integrating LLM services into Qt applications
-- Scope: local-first and OpenAI-compatible remote APIs
+- Purpose: lightweight Qt/C++ local-first LLM integration toolkit
+- Targets: Qt desktop apps, local providers, OpenAI-compatible remote APIs
 
-## 2. Design Goals
+## 2. Goals
 1. Qt-native implementation
 2. Lightweight architecture
 3. Minimal dependencies
 4. Provider abstraction
-5. Asynchronous networking
+5. Async networking
 6. Streaming support
 7. Easy integration
 
 ## 3. Technical Direction
 - Language: C++
 - Framework: Qt
-- Build system: qmake (current baseline)
-- IDE focus: Qt Creator
-- Transport: HTTP APIs
+- Build: qmake
+- IDE: Qt Creator
+- Transport: HTTP
+- Baseline API: OpenAI-compatible `/chat/completions`
 
-## 4. Provider Types
-- Local: Ollama, vLLM, llama.cpp-compatible, LM Studio-compatible
-- Remote: OpenAI and OpenAI-compatible services
-
-## 5. High-Level Architecture
+## 4. Architecture
 `Qt Application -> QtLLMClient -> ILLMProvider -> HttpExecutor -> LLM service`
 
-## 6. Core Components
-- `QtLLMClient`: request orchestration, provider ownership, async signal API
-- `ILLMProvider`: request/response shape, URL/headers/payload parsing
-- `HttpExecutor`: async HTTP execution via `QNetworkAccessManager`
-- Streaming parser: chunk/token incremental parsing
-- Config model: base URL, API key, provider/model configuration
-
-## 7. Coding Principles
-- Keep interfaces small
-- Keep provider logic decoupled
-- Avoid blocking UI thread
-- Prefer incremental, compilable changes
-
-## 8. Initial Scope (Phase 1)
+## 5. Current Status (2026-03-07)
+### Completed
+- qmake workspace
 - `QtLLMClient`
 - `ILLMProvider`
-- OpenAI-compatible provider
-- Basic HTTP executor
-- Simple example app
+- `OpenAICompatibleProvider`
+- async `HttpExecutor`
+- `OllamaProvider`/`VllmProvider` class stubs
+- `simple_chat` with provider switch, model list fetch, streaming UI
+- Windows/Linux linking stabilization
 
-## 9. Roadmap
-- Phase 1: foundation
-- Phase 2: provider expansion and config persistence
-- Phase 3: richer abstractions and UX
-- Phase 4: advanced AI integration and Qt Creator exploration
+### Partial / Pending
+- provider-specific Ollama/vLLM adaptations
+- provider factory
+- robust fragmented-stream parser flow
+- config persistence
+- test suite
+- packaging workflow
 
-## 10. Constraints
-- Must work on Windows and Linux
-- Keep dependency/compile overhead low
-- Support local/intranet model servers
+## 6. Planned Phases
+### Phase 2
+- provider factory
+- improved provider compatibility
+- streaming robustness
+- timeout/retry/cancel
 
-## 11. Non-goals
-- No model inference implementation
-- No mandatory Python runtime for core C++ library
-- No heavy serving frameworks embedded
+### Phase 3
+- richer message abstraction
+- optional persistence
+- better example UX
+- tests
 
-## 12. Guidance for Coding Agents
-- Read core docs first
-- Preserve abstraction boundaries
-- Keep networking async
-- Prefer small, focused changes
+### Phase 4
+- embeddings
+- tool-calling abstractions
+- retrieval helper APIs
+
+## 7. Constraints
+- Windows + Linux support
+- local/intranet friendly
+- low dependency overhead
+
+## 8. Non-goals
+- no model inference implementation
+- no heavy serving framework embedding
+- no UI/provider tight coupling

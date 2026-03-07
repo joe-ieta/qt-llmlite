@@ -4,27 +4,21 @@
 
 **Project Name**
 
-qt-llm
+qt-llmlite (qt-llm)
 
 **Purpose**
 
-qt-llm is a lightweight Qt/C++ toolkit for integrating Large Language Model services into Qt applications.
+qt-llmlite is a lightweight Qt/C++ toolkit for integrating local-first Large Language Model services into Qt applications.
 
-The project is intended to support:
+Primary support targets:
 
 - Qt desktop applications
-- future Qt Creator integration
 - local LLM services
-- remote LLM services
-- OpenAI-compatible APIs
-
-The project should be friendly to both human developers and AI coding agents.
+- remote LLM services via OpenAI-compatible APIs
 
 ---
 
 ## 2. Design Goals
-
-Primary goals:
 
 1. Qt-native implementation
 2. lightweight architecture
@@ -37,20 +31,23 @@ Primary goals:
 
 ---
 
-## 3. Preferred Technical Direction
+## 3. Technical Direction
 
 - Language: C++
 - Framework: Qt
-- Build system: qmake for the initial version
+- Build system: qmake
 - IDE target: Qt Creator
 - Main transport: HTTP-based APIs
-- Baseline compatibility: OpenAI-compatible chat/completions style APIs
+- Baseline API shape: OpenAI-compatible `/chat/completions`
 
-This project should avoid Python and avoid heavy frameworks unless a later phase justifies them.
+Constraints:
+
+- keep core library Python-free
+- avoid heavy frameworks/dependencies
 
 ---
 
-## 4. Supported Provider Types
+## 4. Provider Types
 
 ### Local providers
 
@@ -62,35 +59,29 @@ This project should avoid Python and avoid heavy frameworks unless a later phase
 ### Remote providers
 
 - OpenAI
-- any OpenAI-compatible service
+- OpenAI-compatible services
 
-The internal design must not hard-code provider logic into the main client.
+Provider logic must remain outside `QtLLMClient`.
 
 ---
 
 ## 5. High-Level Architecture
 
 ```text
-Qt Application
-      │
-      ▼
- QtLLMClient
-      │
-      ▼
- ILLMProvider
-   ├── OpenAICompatibleProvider
-   ├── OllamaProvider
-   ├── VllmProvider
-   └── Custom providers
+Qt Application/UI
+  -> QtLLMClient
+  -> ILLMProvider
+  -> HttpExecutor
+  -> Local or remote LLM service
 ```
 
 Supporting modules:
 
-- configuration
-- request/response models
-- network execution
-- streaming parsing
-- error handling
+- configuration model
+- request/response types
+- async HTTP execution
+- streaming chunk handling
+- error propagation
 
 ---
 
@@ -98,105 +89,96 @@ Supporting modules:
 
 ### 6.1 QtLLMClient
 
-Responsibilities:
-
-- accepts prompts/messages from application code
-- owns the active provider
+- receives prompts/messages from app code
+- owns active provider
 - exposes async API via signals/slots
-- exposes streaming callbacks/signals
-- forwards provider/network errors
+- emits streaming tokens and completion/error events
 
 ### 6.2 ILLMProvider
 
-Responsibilities:
+- provider identity
+- request URL/headers/payload generation
+- final response parsing
+- stream token parsing
 
-- define provider identity
-- build request URL
-- build request payload
-- build headers
-- parse response chunks
-- parse final response
+### 6.3 HttpExecutor
 
-### 6.3 Network layer
+- wraps `QNetworkAccessManager`
+- emits `dataReceived`, `requestFinished`, `errorOccurred`
+- keeps request flow async and UI-thread friendly
 
-Responsibilities:
+### 6.4 Streaming support
 
-- wrap QNetworkAccessManager usage
-- keep all operations async
-- provide a clean signal-based interface
-- avoid blocking the UI thread
-
-### 6.4 Streaming layer
-
-Responsibilities:
-
-- parse SSE-like or chunked response streams
-- emit token fragments incrementally
-- handle partial chunk buffering safely
+- incremental chunk handling
+- token emission for stream mode
+- safe handling of partial responses (current capability is basic)
 
 ### 6.5 Configuration model
 
-Responsibilities:
-
-- store base URL, API key, provider type, model name
-- allow persistent loading/saving later
-- remain simple in phase 1
+- `providerName`, `baseUrl`, `apiKey`, `model`, `stream`
 
 ---
 
-## 7. Coding Principles
+## 7. Current Implementation Status (as of 2026-03-07)
 
-- prefer Qt-native types when appropriate
-- use signals and slots for async flows
-- use RAII
-- avoid raw pointer ownership when possible
-- keep interfaces small and composable
-- avoid over-engineering
-- keep provider implementations loosely coupled
+### Completed
 
----
+- qmake multi-project workspace
+- `QtLLMClient` with async request orchestration
+- `ILLMProvider` abstraction
+- `OpenAICompatibleProvider` request/response and stream-token parsing
+- `HttpExecutor` async POST wrapper
+- `OllamaProvider` and `VllmProvider` class stubs (name-level differentiation)
+- `simple_chat` example with:
+  - provider selection
+  - base URL / API key input
+  - model list fetching from `/models`
+  - streaming output display
+- cross-platform linking fixes for Windows (MSVC/MinGW) and Linux static library layout
 
-## 8. Initial Scope (Phase 1)
+### Not completed / partial
 
-Phase 1 should deliver:
-
-- `QtLLMClient`
-- `ILLMProvider`
-- one OpenAI-compatible provider implementation
-- one basic network wrapper
-- one simple example UI
-- repository documentation for AI tools and human contributors
-
----
-
-## 9. Roadmap
-
-### Phase 1
-
-- OpenAI-compatible provider
-- base models for request/response
-- simple streaming support
-- demo chat window
-
-### Phase 2
-
-- Ollama provider
-- vLLM provider
-- provider factory
+- dedicated provider-specific request/response adaptations for Ollama/vLLM beyond OpenAI-compatible baseline
+- provider factory in core library
+- robust SSE/stream parser integrated end-to-end for fragmented chunks
 - config persistence
+- automated tests (unit/integration)
+- packaging/distribution workflow for reusable Qt package artifacts
 
-### Phase 3
+---
 
-- richer prompt/message abstractions
-- embeddings support
+## 8. Scope Baseline (Current)
+
+Current baseline includes:
+
+- reusable core library (`src/qtllm`)
+- one working OpenAI-compatible provider path
+- demo Qt Widgets application (`simple_chat`)
+- documentation set (English + Chinese)
+
+---
+
+## 9. Roadmap (Planning)
+
+### Phase 2: provider completion and platform stability
+
+- provider factory in core
+- stronger Ollama/vLLM compatibility behavior
+- robust streaming parser integration
+- request timeout/retry/cancellation support
+
+### Phase 3: developer usability
+
+- richer message abstractions (system/user/assistant history)
+- optional config persistence
+- improved example UX and validation
+- test suite foundation
+
+### Phase 4: advanced capabilities
+
+- embeddings abstraction
 - tool-calling oriented abstractions
-- better example applications
-
-### Phase 4
-
-- Qt Creator-oriented integration concepts
-- plugin architecture discussion
-- advanced provider capabilities
+- retrieval-oriented helper APIs
 
 ---
 
@@ -215,20 +197,16 @@ Phase 1 should deliver:
 The project will not:
 
 - implement model inference itself
-- depend on Python runtime
 - embed heavyweight serving frameworks
 - tightly couple UI code with provider internals
 
 ---
 
-## 12. Instructions for AI coding agents
-
-When continuing this project:
+## 12. Instructions for Coding Agents
 
 1. Read `PROJECT_SPEC.md`, `AI_RULES.md`, `ARCHITECTURE.md`, and `CODING_GUIDELINES.md` first.
-2. Preserve provider abstraction.
-3. Keep network operations asynchronous.
+2. Preserve provider abstraction boundaries.
+3. Keep networking asynchronous.
 4. Prefer incremental, compilable changes.
-5. Do not introduce unnecessary dependencies.
-6. Use qmake unless explicitly asked to migrate to CMake.
-7. Keep code readable for Qt developers using Qt Creator.
+5. Avoid unnecessary dependencies.
+6. Keep Qt Creator workflow first-class.

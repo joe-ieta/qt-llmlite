@@ -8,6 +8,7 @@
 
 class ILLMProvider;
 class HttpExecutor;
+class StreamChunkParser;
 
 class QtLLMClient : public QObject
 {
@@ -18,7 +19,10 @@ public:
 
     void setConfig(const LlmConfig &config);
     void setProvider(std::unique_ptr<ILLMProvider> provider);
+    bool setProviderByName(const QString &providerName);
+
     void sendPrompt(const QString &prompt);
+    void cancelCurrentRequest();
 
 signals:
     void tokenReceived(const QString &token);
@@ -32,5 +36,6 @@ private:
     LlmConfig m_config;
     std::unique_ptr<ILLMProvider> m_provider;
     HttpExecutor *m_executor;
+    std::unique_ptr<StreamChunkParser> m_streamParser;
     QString m_accumulatedText;
 };

@@ -17,6 +17,8 @@
 
 ## ÎÄµµ
 - `docs/PROJECT_INTRODUCTION.md`
+- `PROJECT_SPEC.md`
+- `docs/DELIVERY_INTEGRATION.md`
 - `docs/ROADMAP.md`
 - `docs/DECISIONS.md`
 - `docs/ABOUT_SNIPPETS.md`

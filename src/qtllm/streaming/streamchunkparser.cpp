@@ -15,6 +15,17 @@ QStringList StreamChunkParser::append(const QByteArray &chunk)
     return completeLines;
 }
 
+QString StreamChunkParser::takePendingLine()
+{
+    if (m_buffer.isEmpty()) {
+        return QString();
+    }
+
+    const QString pending = QString::fromUtf8(m_buffer);
+    m_buffer.clear();
+    return pending;
+}
+
 void StreamChunkParser::clear()
 {
     m_buffer.clear();
