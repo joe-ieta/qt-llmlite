@@ -9,6 +9,8 @@ class QNetworkAccessManager;
 class QNetworkReply;
 class QTimer;
 
+namespace qtllm {
+
 struct HttpRequestOptions
 {
     int timeoutMs = 60000;
@@ -50,3 +52,5 @@ private:
     bool m_timedOut = false;
     bool m_cancelRequested = false;
 };
+
+} // namespace qtllm

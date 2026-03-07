@@ -13,7 +13,10 @@ class QNetworkAccessManager;
 class QNetworkReply;
 class QObject;
 class QEvent;
+
+namespace qtllm {
 class QtLLMClient;
+}
 
 class ChatWindow : public QWidget
 {
@@ -45,7 +48,7 @@ private:
     QTextEdit *m_output;
     QLineEdit *m_input;
     QPushButton *m_sendButton;
-    QtLLMClient *m_client;
+    qtllm::QtLLMClient *m_client;
     QNetworkAccessManager *m_networkManager;
     QPointer<QNetworkReply> m_modelsReply;
 };

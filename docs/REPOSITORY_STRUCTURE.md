@@ -18,11 +18,16 @@
   - `streaming/`: chunk/token parser
 - `src/examples/simple_chat/`: minimal Qt Widgets integration example
 
+## Tests
+
+- `tests/qtllm_tests/`: Qt Test unit-test baseline
+
 ## Documentation
 
 - `docs/PROJECT_INTRODUCTION.md`: bilingual project introduction
 - `PROJECT_SPEC.md`: requirements and status baseline
 - `docs/DELIVERY_INTEGRATION.md`: deliverables and integration guide
+- `docs/TESTING_BASELINE.md`: testing scope and run instructions
 - `docs/ROADMAP.md`: phased development plan
 - `docs/DECISIONS.md`: key architecture decisions
 - `docs/ABOUT_SNIPPETS.md`: GitHub About text and topic suggestions

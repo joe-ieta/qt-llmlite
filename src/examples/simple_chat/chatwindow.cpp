@@ -60,15 +60,15 @@ const ProviderOption *findProviderOption(const QString &providerId)
     return nullptr;
 }
 
-std::unique_ptr<ILLMProvider> createProviderById(const QString &providerId)
+std::unique_ptr<qtllm::ILLMProvider> createProviderById(const QString &providerId)
 {
     if (providerId == QStringLiteral("ollama")) {
-        return std::make_unique<OllamaProvider>();
+        return std::make_unique<qtllm::OllamaProvider>();
     }
     if (providerId == QStringLiteral("vllm")) {
-        return std::make_unique<VllmProvider>();
+        return std::make_unique<qtllm::VllmProvider>();
     }
-    return std::make_unique<OpenAICompatibleProvider>();
+    return std::make_unique<qtllm::OpenAICompatibleProvider>();
 }
 
 QUrl buildModelsUrl(const QString &baseUrl)
@@ -98,7 +98,7 @@ ChatWindow::ChatWindow(QWidget *parent)
     , m_output(new QTextEdit(this))
     , m_input(new QLineEdit(this))
     , m_sendButton(new QPushButton(QStringLiteral("Send"), this))
-    , m_client(new QtLLMClient(this))
+    , m_client(new qtllm::QtLLMClient(this))
     , m_networkManager(new QNetworkAccessManager(this))
 {
     m_output->setReadOnly(true);
@@ -145,15 +145,15 @@ ChatWindow::ChatWindow(QWidget *parent)
             this, [this](const QString &) { applyConfigToClient(); });
 
     connect(m_sendButton, &QPushButton::clicked, this, &ChatWindow::onSendClicked);
-    connect(m_client, &QtLLMClient::tokenReceived, this, [this](const QString &token) {
+    connect(m_client, &qtllm::QtLLMClient::tokenReceived, this, [this](const QString &token) {
         m_output->moveCursor(QTextCursor::End);
         m_output->insertPlainText(token);
     });
-    connect(m_client, &QtLLMClient::completed, this, [this](const QString &) {
+    connect(m_client, &qtllm::QtLLMClient::completed, this, [this](const QString &) {
         m_output->append(QString());
         m_output->append(QStringLiteral("--- done ---"));
     });
-    connect(m_client, &QtLLMClient::errorOccurred, this, [this](const QString &message) {
+    connect(m_client, &qtllm::QtLLMClient::errorOccurred, this, [this](const QString &message) {
         m_output->append(QStringLiteral("[error] ") + message);
     });
 
@@ -263,7 +263,7 @@ bool ChatWindow::eventFilter(QObject *watched, QEvent *event)
 
 void ChatWindow::applyConfigToClient()
 {
-    LlmConfig config;
+    qtllm::LlmConfig config;
     config.providerName = selectedProviderId();
     config.baseUrl = m_baseUrlEdit->text().trimmed();
     config.apiKey = m_apiKeyEdit->text().trimmed();

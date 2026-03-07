@@ -16,7 +16,10 @@ INCLUDEPATH += \
     $$PWD/core \
     $$PWD/providers \
     $$PWD/network \
-    $$PWD/streaming
+    $$PWD/streaming \
+    $$PWD/chat \
+    $$PWD/storage \
+    $$PWD/profile
 
 HEADERS += \
     core/llmconfig.h \
@@ -28,7 +31,13 @@ HEADERS += \
     providers/providerfactory.h \
     providers/vllmprovider.h \
     network/httpexecutor.h \
-    streaming/streamchunkparser.h
+    streaming/streamchunkparser.h \
+    chat/conversationsnapshot.h \
+    chat/conversationclient.h \
+    chat/conversationclientfactory.h \
+    storage/conversationrepository.h \
+    profile/clientprofile.h \
+    profile/memorypolicy.h
 
 SOURCES += \
     core/qtllmclient.cpp \
@@ -37,4 +46,7 @@ SOURCES += \
     providers/providerfactory.cpp \
     providers/vllmprovider.cpp \
     network/httpexecutor.cpp \
-    streaming/streamchunkparser.cpp
+    streaming/streamchunkparser.cpp \
+    chat/conversationclient.cpp \
+    chat/conversationclientfactory.cpp \
+    storage/conversationrepository.cpp

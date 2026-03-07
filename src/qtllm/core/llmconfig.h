@@ -2,6 +2,8 @@
 
 #include <QString>
 
+namespace qtllm {
+
 struct LlmConfig
 {
     QString providerName;
@@ -14,3 +16,5 @@ struct LlmConfig
     int maxRetries = 0;
     int retryDelayMs = 400;
 };
+
+} // namespace qtllm

@@ -5,6 +5,8 @@
 #include <QNetworkRequest>
 #include <QTimer>
 
+namespace qtllm {
+
 HttpExecutor::HttpExecutor(QObject *parent)
     : QObject(parent)
     , m_networkAccessManager(new QNetworkAccessManager(this))
@@ -139,3 +141,5 @@ bool HttpExecutor::canRetry() const
 {
     return m_attempt <= m_options.maxRetries;
 }
+
+} // namespace qtllm

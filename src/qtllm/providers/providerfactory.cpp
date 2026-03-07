@@ -6,6 +6,8 @@
 
 #include <QString>
 
+namespace qtllm {
+
 std::unique_ptr<ILLMProvider> ProviderFactory::create(const QString &providerName)
 {
     if (providerName == QStringLiteral("ollama")) {
@@ -24,3 +26,5 @@ std::unique_ptr<ILLMProvider> ProviderFactory::create(const QString &providerNam
 
     return nullptr;
 }
+
+} // namespace qtllm

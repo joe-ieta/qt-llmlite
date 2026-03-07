@@ -5,6 +5,8 @@
 #include "../providers/providerfactory.h"
 #include "../streaming/streamchunkparser.h"
 
+namespace qtllm {
+
 QtLLMClient::QtLLMClient(QObject *parent)
     : QObject(parent)
     , m_executor(new HttpExecutor(this))
@@ -135,3 +137,5 @@ void QtLLMClient::wireExecutor()
         emit errorOccurred(message);
     });
 }
+
+} // namespace qtllm

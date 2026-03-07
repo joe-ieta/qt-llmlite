@@ -6,6 +6,8 @@
 #include <QObject>
 #include <memory>
 
+namespace qtllm {
+
 class ILLMProvider;
 class HttpExecutor;
 class StreamChunkParser;
@@ -39,3 +41,5 @@ private:
     std::unique_ptr<StreamChunkParser> m_streamParser;
     QString m_accumulatedText;
 };
+
+} // namespace qtllm

@@ -1,7 +1,7 @@
 # REPOSITORY_STRUCTURE / �ֿ�ṹ
 
 ## Summary / ժҪ
-Directory-level map for source, documentation, and contributor assets.
+Directory-level map for source, tests, documentation, and contributor assets.
 
 ## Top Level
 - `README.md`
@@ -15,10 +15,14 @@ Directory-level map for source, documentation, and contributor assets.
 - `src/qtllm/`: C++ core library
 - `src/examples/simple_chat/`: example app
 
+## Tests
+- `tests/qtllm_tests/`: Qt Test unit baseline
+
 ## Documentation
 - `docs/PROJECT_INTRODUCTION.md`
 - `PROJECT_SPEC.md`
 - `docs/DELIVERY_INTEGRATION.md`
+- `docs/TESTING_BASELINE.md`
 - `docs/ROADMAP.md`
 - `docs/DECISIONS.md`
 - `docs/ABOUT_SNIPPETS.md`

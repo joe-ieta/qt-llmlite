@@ -5,6 +5,8 @@
 #include <QJsonObject>
 #include <QUrl>
 
+namespace qtllm {
+
 QString OpenAICompatibleProvider::name() const
 {
     return QStringLiteral("openai-compatible");
@@ -122,3 +124,5 @@ QList<QString> OpenAICompatibleProvider::parseStreamTokens(const QByteArray &chu
 
     return tokens;
 }
+
+} // namespace qtllm

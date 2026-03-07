@@ -2,6 +2,8 @@
 
 #include "illmprovider.h"
 
+namespace qtllm {
+
 class OpenAICompatibleProvider : public ILLMProvider
 {
 public:
@@ -16,3 +18,5 @@ public:
 private:
     LlmConfig m_config;
 };
+
+} // namespace qtllm

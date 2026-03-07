@@ -1,0 +1,36 @@
+TEMPLATE = app
+TARGET = multi_client_chat
+CONFIG += c++17 warn_on
+QT += core gui widgets network
+
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+
+INCLUDEPATH += \
+    ../../qtllm \
+    ../../qtllm/core \
+    ../../qtllm/providers \
+    ../../qtllm/network \
+    ../../qtllm/streaming \
+    ../../qtllm/chat \
+    ../../qtllm/storage \
+    ../../qtllm/profile
+
+HEADERS += \
+    multiclientwindow.h
+
+SOURCES += \
+    main.cpp \
+    multiclientwindow.cpp
+
+QTLLM_LIB_DIR = $$clean_path($$OUT_PWD/../../qtllm/lib)
+CONFIG(debug, debug|release): QTLLM_LIB_DIR = $$clean_path($$QTLLM_LIB_DIR/debug)
+CONFIG(release, debug|release): QTLLM_LIB_DIR = $$clean_path($$QTLLM_LIB_DIR/release)
+
+win32-msvc* {
+    QTLLM_LIB_FILE = $$QTLLM_LIB_DIR/qtllm.lib
+} else {
+    QTLLM_LIB_FILE = $$QTLLM_LIB_DIR/libqtllm.a
+}
+
+LIBS += -L$$QTLLM_LIB_DIR -lqtllm
+PRE_TARGETDEPS += $$QTLLM_LIB_FILE

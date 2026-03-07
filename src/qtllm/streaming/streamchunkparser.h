@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+namespace qtllm {
+
 class StreamChunkParser
 {
 public:
@@ -14,3 +16,5 @@ public:
 private:
     QByteArray m_buffer;
 };
+
+} // namespace qtllm

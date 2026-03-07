@@ -1,5 +1,7 @@
 #include "streamchunkparser.h"
 
+namespace qtllm {
+
 QStringList StreamChunkParser::append(const QByteArray &chunk)
 {
     m_buffer.append(chunk);
@@ -30,3 +32,5 @@ void StreamChunkParser::clear()
 {
     m_buffer.clear();
 }
+
+} // namespace qtllm

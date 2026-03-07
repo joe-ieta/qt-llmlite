@@ -8,6 +8,8 @@
 #include <QNetworkRequest>
 #include <QString>
 
+namespace qtllm {
+
 class ILLMProvider
 {
 public:
@@ -22,3 +24,5 @@ public:
 
     virtual QList<QString> parseStreamTokens(const QByteArray &chunk) const = 0;
 };
+
+} // namespace qtllm

@@ -3,6 +3,8 @@
 #include <QString>
 #include <QVector>
 
+namespace qtllm {
+
 struct LlmMessage
 {
     QString role;
@@ -22,3 +24,5 @@ struct LlmResponse
     bool success = false;
     QString errorMessage;
 };
+
+} // namespace qtllm
