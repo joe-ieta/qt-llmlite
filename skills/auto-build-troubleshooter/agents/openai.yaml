@@ -1,0 +1,4 @@
+﻿interface:
+  display_name: "Auto Build Troubleshooter"
+  short_description: "Auto-fix build failures with bounded retries and logs."
+  default_prompt: "Use $auto-build-troubleshooter to auto-fix build failures, run Python-assisted tests, log each attempt, and stop after 3 failed retries."
