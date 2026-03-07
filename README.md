@@ -1,6 +1,14 @@
-# qt-llm
+# qt-llmlite (qt-llm)
 
-A lightweight, Qt-native toolkit for integrating LLM services into Qt applications.
+## 简介 / Introduction
+
+### 中文
+`qt-llmlite` 是一个面向 Qt 开发者的轻量级本地模型接入库。项目基于 Qt/C++ 提供统一客户端与 Provider 抽象，可快速连接 Ollama、vLLM 及其他 OpenAI 兼容接口。它既可作为独立 Qt 包引入，也可按源码级方式集成到现有工程，以较低改造成本完成本地大模型能力接入。
+
+### English
+`qt-llmlite` is a lightweight local-LLM integration library for Qt developers. It provides a Qt/C++ native client with a provider abstraction to quickly connect to Ollama, vLLM, and other OpenAI-compatible endpoints. The project can be used either as a standalone Qt package or integrated directly at source level into existing applications, enabling fast local model adoption with minimal refactoring cost.
+
+See: `docs/PROJECT_INTRODUCTION.md`
 
 ## Goals
 
@@ -15,7 +23,7 @@ A lightweight, Qt-native toolkit for integrating LLM services into Qt applicatio
 
 - `src/qtllm`: C++ Qt library core (`QtLLMClient`, providers, networking, streaming parser)
 - `src/examples/simple_chat`: minimal Qt Widgets chat example
-- `docs`: roadmap and architecture decisions
+- `docs`: roadmap, decisions, and project introduction
 - `tools/qtcreator`: Qt Creator External Tool templates
 - `src/qt_llm`: optional Python CLI bridge for Qt Creator tooling
 

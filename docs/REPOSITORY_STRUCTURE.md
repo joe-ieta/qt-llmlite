@@ -19,9 +19,14 @@
 - `src/examples/simple_chat/`: minimal Qt Widgets integration example
 - `src/qt_llm/`: optional Python CLI bridge for Qt Creator external tools
 
+## Documentation
+
+- `docs/PROJECT_INTRODUCTION.md`: bilingual project introduction
+- `docs/ROADMAP.md`: phased development plan
+- `docs/DECISIONS.md`: key architecture decisions
+
 ## Supporting assets
 
-- `docs/`: roadmap and decisions
 - `scripts/`: helper setup scripts
 - `tools/qtcreator/`: Qt Creator External Tool templates
 - `.github/`: issue and PR templates
