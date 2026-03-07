@@ -19,6 +19,15 @@ SOURCES += \
     main.cpp \
     chatwindow.cpp
 
-LIBS += -L../../qtllm -lqtllm
+QTLLM_LIB_DIR = $$clean_path($$OUT_PWD/../../qtllm/lib)
+CONFIG(debug, debug|release): QTLLM_LIB_DIR = $$clean_path($$QTLLM_LIB_DIR/debug)
+CONFIG(release, debug|release): QTLLM_LIB_DIR = $$clean_path($$QTLLM_LIB_DIR/release)
 
-PRE_TARGETDEPS += ../../qtllm/libqtllm.a
+win32-msvc* {
+    QTLLM_LIB_FILE = $$QTLLM_LIB_DIR/qtllm.lib
+} else {
+    QTLLM_LIB_FILE = $$QTLLM_LIB_DIR/libqtllm.a
+}
+
+LIBS += -L$$QTLLM_LIB_DIR -lqtllm
+PRE_TARGETDEPS += $$QTLLM_LIB_FILE

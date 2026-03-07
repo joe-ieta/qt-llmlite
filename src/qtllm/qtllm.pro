@@ -1,9 +1,15 @@
 TEMPLATE = lib
 TARGET = qtllm
-CONFIG += c++17 warn_on
+CONFIG += c++17 warn_on staticlib
 QT += core network
 
 DEFINES += QTLLM_LIBRARY
+
+# Keep library output predictable across platforms and shadow builds.
+QTLLM_LIB_DIR = $$OUT_PWD/lib
+CONFIG(debug, debug|release): QTLLM_LIB_DIR = $$OUT_PWD/lib/debug
+CONFIG(release, debug|release): QTLLM_LIB_DIR = $$OUT_PWD/lib/release
+DESTDIR = $$QTLLM_LIB_DIR
 
 INCLUDEPATH += \
     $$PWD \

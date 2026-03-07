@@ -29,7 +29,7 @@ ChatWindow::ChatWindow(QWidget *parent)
     LlmConfig config;
     config.providerName = QStringLiteral("openai-compatible");
     config.baseUrl = QStringLiteral("http://127.0.0.1:11434/v1");
-    config.model = QStringLiteral("llama3");
+    config.model = QStringLiteral("qwen3.5:2b");
     config.stream = true;
 
     m_client->setConfig(config);
