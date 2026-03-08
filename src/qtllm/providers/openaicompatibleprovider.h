@@ -14,6 +14,7 @@ public:
     QByteArray buildPayload(const LlmRequest &request) const override;
     LlmResponse parseResponse(const QByteArray &data) const override;
     QList<QString> parseStreamTokens(const QByteArray &chunk) const override;
+    bool supportsStructuredToolCalls() const override;
 
 private:
     LlmConfig m_config;

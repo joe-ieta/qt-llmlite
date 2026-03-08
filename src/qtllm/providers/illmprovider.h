@@ -23,6 +23,11 @@ public:
     virtual LlmResponse parseResponse(const QByteArray &data) const = 0;
 
     virtual QList<QString> parseStreamTokens(const QByteArray &chunk) const = 0;
+
+    virtual bool supportsStructuredToolCalls() const
+    {
+        return false;
+    }
 };
 
 } // namespace qtllm

@@ -33,6 +33,26 @@ struct ConversationSessionSnapshot
             QJsonObject item;
             item.insert(QStringLiteral("role"), message.role);
             item.insert(QStringLiteral("content"), message.content);
+            if (!message.name.isEmpty()) {
+                item.insert(QStringLiteral("name"), message.name);
+            }
+            if (!message.toolCallId.isEmpty()) {
+                item.insert(QStringLiteral("toolCallId"), message.toolCallId);
+            }
+
+            if (!message.toolCalls.isEmpty()) {
+                QJsonArray toolCalls;
+                for (const LlmToolCall &call : message.toolCalls) {
+                    QJsonObject callJson;
+                    callJson.insert(QStringLiteral("id"), call.id);
+                    callJson.insert(QStringLiteral("name"), call.name);
+                    callJson.insert(QStringLiteral("type"), call.type);
+                    callJson.insert(QStringLiteral("arguments"), call.arguments);
+                    toolCalls.append(callJson);
+                }
+                item.insert(QStringLiteral("toolCalls"), toolCalls);
+            }
+
             historyArray.append(item);
         }
         root.insert(QStringLiteral("history"), historyArray);
@@ -63,6 +83,22 @@ struct ConversationSessionSnapshot
             LlmMessage message;
             message.role = item.value(QStringLiteral("role")).toString();
             message.content = item.value(QStringLiteral("content")).toString();
+            message.name = item.value(QStringLiteral("name")).toString();
+            message.toolCallId = item.value(QStringLiteral("toolCallId")).toString();
+
+            const QJsonArray toolCallsArray = item.value(QStringLiteral("toolCalls")).toArray();
+            for (const QJsonValue &callValue : toolCallsArray) {
+                const QJsonObject callJson = callValue.toObject();
+                LlmToolCall call;
+                call.id = callJson.value(QStringLiteral("id")).toString();
+                call.name = callJson.value(QStringLiteral("name")).toString();
+                call.type = callJson.value(QStringLiteral("type")).toString(call.type);
+                call.arguments = callJson.value(QStringLiteral("arguments")).toObject();
+                if (!call.name.isEmpty()) {
+                    message.toolCalls.append(call);
+                }
+            }
+
             if (!message.role.isEmpty()) {
                 snapshot.history.append(message);
             }
@@ -90,6 +126,7 @@ struct ConversationSnapshot
         configObject.insert(QStringLiteral("baseUrl"), config.baseUrl);
         configObject.insert(QStringLiteral("apiKey"), config.apiKey);
         configObject.insert(QStringLiteral("model"), config.model);
+        configObject.insert(QStringLiteral("modelVendor"), config.modelVendor);
         configObject.insert(QStringLiteral("stream"), config.stream);
         configObject.insert(QStringLiteral("timeoutMs"), config.timeoutMs);
         configObject.insert(QStringLiteral("maxRetries"), config.maxRetries);
@@ -118,6 +155,7 @@ struct ConversationSnapshot
         snapshot.config.baseUrl = configObject.value(QStringLiteral("baseUrl")).toString();
         snapshot.config.apiKey = configObject.value(QStringLiteral("apiKey")).toString();
         snapshot.config.model = configObject.value(QStringLiteral("model")).toString();
+        snapshot.config.modelVendor = configObject.value(QStringLiteral("modelVendor")).toString();
         snapshot.config.stream = configObject.value(QStringLiteral("stream")).toBool(snapshot.config.stream);
         snapshot.config.timeoutMs = configObject.value(QStringLiteral("timeoutMs")).toInt(snapshot.config.timeoutMs);
         snapshot.config.maxRetries = configObject.value(QStringLiteral("maxRetries")).toInt(snapshot.config.maxRetries);

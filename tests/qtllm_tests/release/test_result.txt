@@ -1,0 +1,20 @@
+********* Start testing of QtLlmCoreTests *********
+Config: Using QtTest library 5.15.2, Qt 5.15.2 (x86_64-little_endian-llp64 shared (dynamic) release build; by MSVC 2019), windows 10
+PASS   : QtLlmCoreTests::initTestCase()
+PASS   : QtLlmCoreTests::providerFactoryCreatesKnownProviders()
+PASS   : QtLlmCoreTests::providerFactoryCreatesVendorAliases()
+PASS   : QtLlmCoreTests::providerFactoryRejectsUnknownProvider()
+PASS   : QtLlmCoreTests::openAiCompatibleBuildRequestNormalizesPath()
+PASS   : QtLlmCoreTests::openAiCompatibleBuildRequestAnthropic()
+PASS   : QtLlmCoreTests::openAiCompatibleBuildRequestGoogle()
+PASS   : QtLlmCoreTests::openAiCompatibleBuildPayloadProducesJson()
+PASS   : QtLlmCoreTests::openAiCompatibleBuildPayloadAnthropicTools()
+PASS   : QtLlmCoreTests::openAiCompatibleParseResponse()
+PASS   : QtLlmCoreTests::openAiCompatibleParseAnthropicResponse()
+PASS   : QtLlmCoreTests::openAiCompatibleParseGoogleResponse()
+PASS   : QtLlmCoreTests::openAiCompatibleParseStreamTokens()
+PASS   : QtLlmCoreTests::streamChunkParserHandlesFragmentedInput()
+PASS   : QtLlmCoreTests::streamChunkParserTakePendingLine()
+PASS   : QtLlmCoreTests::cleanupTestCase()
+Totals: 16 passed, 0 failed, 0 skipped, 0 blacklisted, 7ms
+********* Finished testing of QtLlmCoreTests *********

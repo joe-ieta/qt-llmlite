@@ -2,9 +2,9 @@
 
 #include "../core/qtllmclient.h"
 #include "../providers/illmprovider.h"
+#include "../tools/runtime/toolcallorchestrator.h"
 
 #include <QDateTime>
-#include <QStringList>
 #include <QUuid>
 #include <QtGlobal>
 
@@ -31,10 +31,24 @@ ConversationClient::ConversationClient(QString uid, QObject *parent)
         emit tokenReceived(token);
     });
 
-    connect(m_llmClient, &QtLLMClient::completed, this, [this](const QString &text) {
-        const QString assistantText = m_pendingAssistantText.isEmpty() ? text : m_pendingAssistantText;
+    connect(m_llmClient, &QtLLMClient::responseReceived, this, [this](const LlmResponse &response) {
+        LlmResponse normalized = response;
+
+        QString assistantText = normalized.assistantMessage.content;
+        if (assistantText.isEmpty()) {
+            assistantText = m_pendingAssistantText.isEmpty() ? normalized.text : m_pendingAssistantText;
+            normalized.assistantMessage.role = QStringLiteral("assistant");
+            normalized.assistantMessage.content = assistantText;
+            normalized.text = assistantText;
+        }
+
         m_pendingAssistantText.clear();
-        appendMessage(QStringLiteral("assistant"), assistantText);
+
+        if (!assistantText.isEmpty()) {
+            appendMessage(QStringLiteral("assistant"), assistantText);
+        }
+
+        emit responseReceived(normalized);
         emit completed(assistantText);
     });
 
@@ -69,6 +83,12 @@ void ConversationClient::setProvider(std::unique_ptr<ILLMProvider> provider)
 bool ConversationClient::setProviderByName(const QString &providerName)
 {
     return m_llmClient->setProviderByName(providerName);
+}
+
+void ConversationClient::setToolCallOrchestrator(
+    const std::shared_ptr<tools::runtime::ToolCallOrchestrator> &orchestrator)
+{
+    m_llmClient->setToolCallOrchestrator(orchestrator);
 }
 
 void ConversationClient::setProfile(const profile::ClientProfile &profile)
@@ -186,7 +206,8 @@ void ConversationClient::sendUserMessage(const QString &content)
 
     appendMessage(QStringLiteral("user"), trimmed);
     m_pendingAssistantText.clear();
-    m_llmClient->sendPrompt(buildPromptForNextTurn(trimmed));
+    m_llmClient->setToolLoopContext(m_uid, m_activeSessionId);
+    m_llmClient->sendRequest(buildRequestForNextTurn());
 }
 
 ConversationSnapshot ConversationClient::snapshot() const
@@ -214,33 +235,41 @@ void ConversationClient::restoreFromSnapshot(const ConversationSnapshot &snapsho
     emit historyChanged();
 }
 
-QString ConversationClient::buildPromptForNextTurn(const QString &currentUserMessage) const
+LlmRequest ConversationClient::buildRequestForNextTurn() const
 {
-    QStringList lines;
+    LlmRequest request;
+    request.model = m_config.model;
+    request.stream = m_config.stream;
 
     if (!m_profile.systemPrompt.trimmed().isEmpty()) {
-        lines.append(QStringLiteral("[system]\n") + m_profile.systemPrompt.trimmed());
+        LlmMessage system;
+        system.role = QStringLiteral("system");
+        system.content = m_profile.systemPrompt.trimmed();
+        request.messages.append(system);
     }
+
     if (!m_profile.persona.trimmed().isEmpty()) {
-        lines.append(QStringLiteral("[persona]\n") + m_profile.persona.trimmed());
+        LlmMessage persona;
+        persona.role = QStringLiteral("system");
+        persona.content = QStringLiteral("Persona: ") + m_profile.persona.trimmed();
+        request.messages.append(persona);
     }
+
     if (!m_profile.thinkingStyle.trimmed().isEmpty()) {
-        lines.append(QStringLiteral("[thinking-style]\n") + m_profile.thinkingStyle.trimmed());
+        LlmMessage thinking;
+        thinking.role = QStringLiteral("system");
+        thinking.content = QStringLiteral("Thinking style: ") + m_profile.thinkingStyle.trimmed();
+        request.messages.append(thinking);
     }
 
     const QVector<LlmMessage> messages = history();
     const int maxMessages = qMax(1, m_profile.memoryPolicy.maxHistoryMessages);
     const int startIndex = qMax(0, messages.size() - maxMessages);
-    if (!messages.isEmpty()) {
-        lines.append(QStringLiteral("[history]"));
-        for (int i = startIndex; i < messages.size(); ++i) {
-            const LlmMessage &message = messages.at(i);
-            lines.append(QStringLiteral("%1: %2").arg(message.role, message.content));
-        }
+    for (int i = startIndex; i < messages.size(); ++i) {
+        request.messages.append(messages.at(i));
     }
 
-    lines.append(QStringLiteral("[current-user]\n") + currentUserMessage);
-    return lines.join(QStringLiteral("\n\n"));
+    return request;
 }
 
 void ConversationClient::appendMessage(const QString &role, const QString &content)

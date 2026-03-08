@@ -13,7 +13,7 @@ namespace qtllm {
 
 struct HttpRequestOptions
 {
-    int timeoutMs = 60000;
+    int timeoutMs = 180000;
     int maxRetries = 0;
     int retryDelayMs = 400;
 };

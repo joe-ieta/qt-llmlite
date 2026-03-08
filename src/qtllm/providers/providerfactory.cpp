@@ -10,17 +10,26 @@ namespace qtllm {
 
 std::unique_ptr<ILLMProvider> ProviderFactory::create(const QString &providerName)
 {
-    if (providerName == QStringLiteral("ollama")) {
+    const QString provider = providerName.trimmed().toLower();
+
+    if (provider == QStringLiteral("ollama")) {
         return std::make_unique<OllamaProvider>();
     }
 
-    if (providerName == QStringLiteral("vllm")) {
+    if (provider == QStringLiteral("vllm")) {
         return std::make_unique<VllmProvider>();
     }
 
-    if (providerName == QStringLiteral("openai") ||
-        providerName == QStringLiteral("openai-compatible") ||
-        providerName == QStringLiteral("sglang")) {
+    if (provider == QStringLiteral("openai")
+        || provider == QStringLiteral("openai-compatible")
+        || provider == QStringLiteral("sglang")
+        || provider == QStringLiteral("anthropic")
+        || provider == QStringLiteral("google")
+        || provider == QStringLiteral("gemini")
+        || provider == QStringLiteral("deepseek")
+        || provider == QStringLiteral("qwen")
+        || provider == QStringLiteral("glm")
+        || provider == QStringLiteral("zhipu")) {
         return std::make_unique<OpenAICompatibleProvider>();
     }
 

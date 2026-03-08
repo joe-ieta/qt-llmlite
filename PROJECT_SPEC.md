@@ -14,7 +14,7 @@ Primary support targets:
 
 - Qt desktop applications
 - local LLM services
-- remote LLM services via OpenAI-compatible APIs
+- remote LLM services via OpenAI-compatible APIs and vendor APIs
 
 ---
 
@@ -28,6 +28,8 @@ Primary support targets:
 6. async network communication
 7. streaming token support
 8. easy integration into existing Qt apps
+9. multi-client conversation orchestration with persistence
+10. tool/function-calling capability with production-oriented extension points
 
 ---
 
@@ -59,9 +61,11 @@ Constraints:
 ### Remote providers
 
 - OpenAI
-- OpenAI-compatible services
+- Anthropic
+- Google
+- DeepSeek / Qwen / GLM class providers via mapped schema path
 
-Provider logic must remain outside `QtLLMClient`.
+Provider logic remains outside application UI and is encapsulated by `ILLMProvider` implementations.
 
 ---
 
@@ -69,7 +73,10 @@ Provider logic must remain outside `QtLLMClient`.
 
 ```text
 Qt Application/UI
-  -> QtLLMClient
+  -> (A) QtLLMClient                        [base + built-in tool loop capable]
+  -> (B) ToolEnabledChatEntry               [optional orchestration entry]
+        -> tool selection + adapter + policy
+        -> QtLLMClient / Provider abstraction
   -> ILLMProvider
   -> HttpExecutor
   -> Local or remote LLM service
@@ -82,6 +89,8 @@ Supporting modules:
 - async HTTP execution
 - streaming chunk handling
 - error propagation
+- conversation client factory and persistence
+- tool registry / catalog / policy / execution / protocol routing
 
 ---
 
@@ -90,59 +99,88 @@ Supporting modules:
 ### 6.1 QtLLMClient
 
 - receives prompts/messages from app code
-- owns active provider
+- owns active provider and executor
 - exposes async API via signals/slots
 - emits streaming tokens and completion/error events
+- supports structured response event (`responseReceived`)
+- includes built-in tool-loop state handling with failure guard
 
-### 6.2 ILLMProvider
+### 6.2 ConversationClient + ConversationClientFactory
+
+- creates and manages multiple client identities (`clientId`)
+- persists and restores client conversation state
+- for each client, tracks one active session and multiple historical sessions
+- supports session switching for history viewing (`clientId + sessionId`)
+- binds tool-loop context (`clientId`, `sessionId`) into request path
+
+### 6.3 ILLMProvider
 
 - provider identity
 - request URL/headers/payload generation
 - final response parsing
 - stream token parsing
+- capability signal for structured tool calls
 
-### 6.3 HttpExecutor
+### 6.4 HttpExecutor
 
 - wraps `QNetworkAccessManager`
 - emits `dataReceived`, `requestFinished`, `errorOccurred`
 - keeps request flow async and UI-thread friendly
 
-### 6.4 Streaming support
+### 6.5 Tool/function-calling abstraction
 
-- incremental chunk handling
-- token emission for stream mode
-- safe handling of partial responses (current capability is basic)
+- `LlmToolRegistry` maintains tool list (`llmTools`)
+- canonical internal tool schema (`LlmToolDefinition`)
+- built-in non-removable tools (`current_time`, `current_weather`)
+- `ToolSelectionLayer` chooses tools per turn
+- `ToolCallProtocolRouter` routes by model vendor first
+- `ToolExecutionLayer` + executor registry handles tool execution abstraction
+- `ToolCallOrchestrator` handles parsing/execution/follow-up/failure-guard loop
+- `ToolEnabledChatEntry` is optional app entry and wiring point
 
-### 6.5 Configuration model
+### 6.6 Tool persistence and policy
 
-- `providerName`, `baseUrl`, `apiKey`, `model`, `stream`
+- `ToolCatalogRepository` persists tool catalog
+- `ClientToolPolicyRepository` persists per-client tool policies
+- built-ins are auto-injected at startup and protected from deletion
+
+### 6.7 Configuration model
+
+- `providerName`, `baseUrl`, `apiKey`, `model`, `modelVendor`, `stream`
 
 ---
 
-## 7. Current Implementation Status (as of 2026-03-07)
+## 7. Current Implementation Status (as of 2026-03-08)
 
 ### Completed
 
 - qmake multi-project workspace
-- `QtLLMClient` with async request orchestration
+- `QtLLMClient` with async request orchestration and built-in tool-loop support
 - `ILLMProvider` abstraction
-- `OpenAICompatibleProvider` request/response and stream-token parsing
+- `OpenAICompatibleProvider`:
+  - OpenAI-style request/response + stream parsing
+  - Anthropic request/response field mapping (`/messages`, `tool_use` blocks)
+  - Google request/response field mapping (`generateContent`, `functionCall` parts)
+- provider creation aliases for OpenAI/Anthropic/Google/DeepSeek/Qwen/GLM classes
 - `HttpExecutor` async POST wrapper
-- `OllamaProvider` and `VllmProvider` class stubs (name-level differentiation)
-- `simple_chat` example with:
-  - provider selection
-  - base URL / API key input
-  - model list fetching from `/models`
-  - streaming output display
-- cross-platform linking fixes for Windows (MSVC/MinGW) and Linux static library layout
+- provider implementations for Ollama / vLLM / OpenAI-compatible paths
+- conversation factory architecture with persistence:
+  - multiple clients
+  - per-client active session
+  - per-client historical sessions
+- tools runtime stack:
+  - registry, built-ins, protocol adapters/router
+  - execution layer, orchestrator, catalog/policy repositories
+- `simple_chat` example retained
+- `multi_client_chat` example showcasing multi-client + session history + tools entry
+- baseline tests extended for provider field mappings and aliases
 
-### Not completed / partial
+### Partial / pending hardening
 
-- dedicated provider-specific request/response adaptations for Ollama/vLLM beyond OpenAI-compatible baseline
-- provider factory in core library
-- robust SSE/stream parser integrated end-to-end for fragmented chunks
-- config persistence
-- automated tests (unit/integration)
+- stricter provider-native schema coverage for more vendors
+- stronger streaming edge-case handling across all vendors
+- richer tool trace persistence in session history
+- broader automated tests for tool-loop state machine and persistence flows
 - packaging/distribution workflow for reusable Qt package artifacts
 
 ---
@@ -152,33 +190,33 @@ Supporting modules:
 Current baseline includes:
 
 - reusable core library (`src/qtllm`)
-- one working OpenAI-compatible provider path
-- demo Qt Widgets application (`simple_chat`)
+- multi-client/session persistence foundation
+- vendor-mapped provider path in current provider stack
+- tools runtime abstraction with built-in tool defaults
+- demo Qt Widgets applications (`simple_chat`, `multi_client_chat`)
 - documentation set (English + Chinese)
 
 ---
 
-## 9. Roadmap (Planning)
+## 9. Roadmap (Next)
 
-### Phase 2: provider completion and platform stability
+### Phase 2: protocol and runtime hardening
 
-- provider factory in core
-- stronger Ollama/vLLM compatibility behavior
-- robust streaming parser integration
-- request timeout/retry/cancellation support
+- expand vendor-native protocol adapters in provider layer
+- robust stream parser behavior for fragmented payloads
+- timeout/retry/cancel hardening under tool-loop chains
 
-### Phase 3: developer usability
+### Phase 3: conversation and trace quality
 
-- richer message abstractions (system/user/assistant history)
-- optional config persistence
-- improved example UX and validation
-- test suite foundation
+- persist structured tool-call/tool-result traces
+- improve session replay/debuggability
+- strengthen test coverage for factory/session/tool-loop interactions
 
-### Phase 4: advanced capabilities
+### Phase 4: production controls
 
-- embeddings abstraction
-- tool-calling oriented abstractions
-- retrieval-oriented helper APIs
+- permission and safety policies per tool category
+- observability fields and audit trails
+- model/tool routing optimization
 
 ---
 
@@ -210,3 +248,4 @@ The project will not:
 4. Prefer incremental, compilable changes.
 5. Avoid unnecessary dependencies.
 6. Keep Qt Creator workflow first-class.
+7. Keep tool/runtime changes additive and backward compatible for base chat usage.

@@ -10,7 +10,14 @@
 #include "../../qtllm/providers/openaicompatibleprovider.h"
 #include "../../qtllm/providers/vllmprovider.h"
 #include "../../qtllm/storage/conversationrepository.h"
+#include "../../qtllm/tools/builtintools.h"
+#include "../../qtllm/tools/llmtoolregistry.h"
+#include "../../qtllm/tools/toolenabledchatentry.h"
+#include "../../qtllm/tools/runtime/clienttoolpolicyrepository.h"
+#include "../../qtllm/tools/runtime/toolcatalogrepository.h"
+#include "../../qtllm/tools/runtime/toolruntime_types.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QFormLayout>
@@ -33,6 +40,7 @@
 #include <QVBoxLayout>
 
 #include <memory>
+#include <optional>
 
 namespace {
 
@@ -107,25 +115,48 @@ QString joinTags(const QStringList &tags)
     return tags.join(QStringLiteral(", "));
 }
 
+void ensureDefaultTools(const std::shared_ptr<qtllm::tools::LlmToolRegistry> &registry, bool *changed)
+{
+    if (!registry) {
+        return;
+    }
+
+    bool localChanged = false;
+    const QList<qtllm::tools::LlmToolDefinition> merged =
+        qtllm::tools::mergeWithBuiltInTools(registry->allTools(), &localChanged);
+    if (localChanged) {
+        registry->replaceAll(merged);
+    }
+
+    if (changed) {
+        *changed = localChanged;
+    }
+}
+
 } // namespace
 
 MultiClientWindow::MultiClientWindow(QWidget *parent)
     : QWidget(parent)
     , m_repository(std::make_shared<qtllm::storage::ConversationRepository>(QStringLiteral(".qtllm/clients")))
     , m_factory(std::make_unique<qtllm::chat::ConversationClientFactory>())
+    , m_toolRegistry(std::make_shared<qtllm::tools::LlmToolRegistry>())
+    , m_toolCatalogRepository(std::make_shared<qtllm::tools::runtime::ToolCatalogRepository>())
+    , m_clientPolicyRepository(std::make_shared<qtllm::tools::runtime::ClientToolPolicyRepository>())
+    , m_toolEntry(nullptr)
     , m_clientList(new QListWidget(this))
-    , m_newClientButton(new QPushButton(QStringLiteral("新建Client"), this))
+    , m_newClientButton(new QPushButton(QStringLiteral("New Client"), this))
     , m_sessionList(new QListWidget(this))
-    , m_newSessionButton(new QPushButton(QStringLiteral("新建会话"), this))
+    , m_newSessionButton(new QPushButton(QStringLiteral("New Session"), this))
     , m_output(new QTextEdit(this))
     , m_input(new QTextEdit(this))
-    , m_sendButton(new QPushButton(QStringLiteral("发送"), this))
+    , m_useToolsCheck(new QCheckBox(QStringLiteral("Use Tools Entry"), this))
+    , m_sendButton(new QPushButton(QStringLiteral("Send"), this))
     , m_providerCombo(new QComboBox(this))
     , m_baseUrlEdit(new QLineEdit(this))
     , m_apiKeyEdit(new QLineEdit(this))
     , m_modelCombo(new QComboBox(this))
-    , m_reloadModelsButton(new QPushButton(QStringLiteral("刷新模型"), this))
-    , m_applyConfigButton(new QPushButton(QStringLiteral("应用配置"), this))
+    , m_reloadModelsButton(new QPushButton(QStringLiteral("Refresh Models"), this))
+    , m_applyConfigButton(new QPushButton(QStringLiteral("Apply Config"), this))
     , m_networkManager(new QNetworkAccessManager(this))
     , m_systemPromptEdit(new QTextEdit(this))
     , m_personaEdit(new QLineEdit(this))
@@ -134,13 +165,36 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     , m_capabilitiesEdit(new QLineEdit(this))
     , m_preferencesEdit(new QLineEdit(this))
     , m_historyWindowEdit(new QLineEdit(this))
-    , m_applyProfileButton(new QPushButton(QStringLiteral("应用画像"), this))
+    , m_applyProfileButton(new QPushButton(QStringLiteral("Apply Profile"), this))
 {
     m_factory->setRepository(m_repository);
+    bool changedCatalog = false;
+    if (m_toolCatalogRepository) {
+        const std::optional<qtllm::tools::runtime::ToolCatalogSnapshot> loaded =
+            m_toolCatalogRepository->loadCatalog(nullptr);
+        if (loaded.has_value()) {
+            QList<qtllm::tools::LlmToolDefinition> loadedTools;
+            for (const qtllm::tools::LlmToolDefinition &tool : loaded->tools) {
+                loadedTools.append(tool);
+            }
+            m_toolRegistry->replaceAll(loadedTools);
+        }
+    }
 
-    m_systemPromptEdit->setPlaceholderText(QStringLiteral("系统提示词"));
+    ensureDefaultTools(m_toolRegistry, &changedCatalog);
+
+    if (changedCatalog && m_toolCatalogRepository) {
+        qtllm::tools::runtime::ToolCatalogSnapshot snapshot;
+        const QList<qtllm::tools::LlmToolDefinition> allTools = m_toolRegistry->allTools();
+        for (const qtllm::tools::LlmToolDefinition &tool : allTools) {
+            snapshot.tools.append(tool);
+        }
+        m_toolCatalogRepository->saveCatalog(snapshot, nullptr);
+    }
+
+    m_systemPromptEdit->setPlaceholderText(QStringLiteral("System prompt"));
     m_output->setReadOnly(true);
-    m_input->setPlaceholderText(QStringLiteral("输入消息"));
+    m_input->setPlaceholderText(QStringLiteral("Input message"));
     m_apiKeyEdit->setEchoMode(QLineEdit::Password);
     m_modelCombo->setEditable(false);
 
@@ -161,6 +215,7 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     auto *centerLayout = new QVBoxLayout();
     centerLayout->addWidget(m_output, 1);
     centerLayout->addWidget(m_input);
+    centerLayout->addWidget(m_useToolsCheck);
     centerLayout->addWidget(m_sendButton);
 
     auto *modelRowLayout = new QHBoxLayout();
@@ -302,8 +357,7 @@ void MultiClientWindow::bindActiveClient(const QSharedPointer<qtllm::chat::Conve
         m_output->append(QStringLiteral("[error] ") + message);
     });
 
-    m_historyConn = connect(client.get(), &qtllm::chat::ConversationClient::historyChanged, this, [this, client]() {
-        Q_UNUSED(client)
+    m_historyConn = connect(client.get(), &qtllm::chat::ConversationClient::historyChanged, this, [this]() {
         renderActiveHistory(activeClient());
     });
 
@@ -415,7 +469,7 @@ bool MultiClientWindow::applyConfigToActiveClient(bool showMessage)
     const ProviderOption *option = findProviderOption(providerId);
     if (!option) {
         if (showMessage) {
-            m_output->append(QStringLiteral("[config] 无效的 Provider"));
+            m_output->append(QStringLiteral("[config] Invalid provider"));
         }
         return false;
     }
@@ -429,7 +483,7 @@ bool MultiClientWindow::applyConfigToActiveClient(bool showMessage)
     const QUrl parsedUrl(baseUrl);
     if (!parsedUrl.isValid() || parsedUrl.scheme().isEmpty() || parsedUrl.host().isEmpty()) {
         if (showMessage) {
-            m_output->append(QStringLiteral("[config] 无效的 Base URL"));
+            m_output->append(QStringLiteral("[config] Invalid base URL"));
         }
         return false;
     }
@@ -437,7 +491,7 @@ bool MultiClientWindow::applyConfigToActiveClient(bool showMessage)
     const QString apiKey = m_apiKeyEdit->text().trimmed();
     if (option->apiKeyRequired && apiKey.isEmpty()) {
         if (showMessage) {
-            m_output->append(QStringLiteral("[config] 当前 Provider 需要 API Key"));
+            m_output->append(QStringLiteral("[config] Provider requires API key"));
         }
         return false;
     }
@@ -445,7 +499,7 @@ bool MultiClientWindow::applyConfigToActiveClient(bool showMessage)
     const QString modelId = m_modelCombo->currentText().trimmed();
     if (modelId.isEmpty()) {
         if (showMessage) {
-            m_output->append(QStringLiteral("[config] 未获取到模型列表，请点击“刷新模型”"));
+            m_output->append(QStringLiteral("[config] No model list available, click Refresh Models"));
         }
         return false;
     }
@@ -467,20 +521,20 @@ void MultiClientWindow::refreshModels()
     const QString providerId = m_providerCombo->currentData().toString();
     const ProviderOption *option = findProviderOption(providerId);
     if (!option) {
-        m_output->append(QStringLiteral("[models] 无效的 Provider"));
+        m_output->append(QStringLiteral("[models] Invalid provider"));
         return;
     }
 
     if (option->apiKeyRequired && m_apiKeyEdit->text().trimmed().isEmpty()) {
         m_modelCombo->clear();
-        m_output->append(QStringLiteral("[models] 该 Provider 需要 API Key，填写后再刷新模型"));
+        m_output->append(QStringLiteral("[models] This provider requires API Key before refreshing models"));
         return;
     }
 
     const QUrl modelsUrl = buildModelsUrl(m_baseUrlEdit->text());
     if (!modelsUrl.isValid() || modelsUrl.scheme().isEmpty() || modelsUrl.host().isEmpty()) {
         m_modelCombo->clear();
-        m_output->append(QStringLiteral("[models] API 地址无效，无法获取模型列表"));
+        m_output->append(QStringLiteral("[models] Invalid API URL, cannot fetch models"));
         return;
     }
 
@@ -504,7 +558,24 @@ void MultiClientWindow::refreshModels()
     m_modelsReply->setProperty("previousModel", previousModel);
     connect(m_modelsReply, &QNetworkReply::finished, this, &MultiClientWindow::onModelsReplyFinished);
 
-    m_output->append(QStringLiteral("[models] 正在获取模型列表..."));
+    m_output->append(QStringLiteral("[models] Fetching model list..."));
+}
+
+void MultiClientWindow::rebuildToolEntryForActiveClient(const QSharedPointer<qtllm::chat::ConversationClient> &client)
+{
+    if (m_toolEntry) {
+        m_toolEntry->deleteLater();
+        m_toolEntry = nullptr;
+    }
+
+    if (!client || !m_toolRegistry) {
+        return;
+    }
+
+    m_toolEntry = new qtllm::tools::ToolEnabledChatEntry(client, m_toolRegistry, this);
+    if (m_clientPolicyRepository) {
+        m_toolEntry->setClientPolicyRepository(m_clientPolicyRepository);
+    }
 }
 
 void MultiClientWindow::onNewClientClicked()
@@ -529,6 +600,7 @@ void MultiClientWindow::onClientSelectionChanged()
     rebuildSessionList(client);
     renderActiveHistory(client);
     refreshEditorFromActiveClient(client);
+    rebuildToolEntryForActiveClient(client);
 }
 
 void MultiClientWindow::onNewSessionClicked()
@@ -573,6 +645,12 @@ void MultiClientWindow::onSendClicked()
 
     m_output->append(QStringLiteral("> ") + prompt);
     m_input->clear();
+
+    if (m_useToolsCheck->isChecked() && m_toolEntry) {
+        m_toolEntry->sendUserMessage(prompt);
+        return;
+    }
+
     client->sendUserMessage(prompt);
 }
 
@@ -625,19 +703,19 @@ void MultiClientWindow::onModelsReplyFinished()
     m_modelsReply.clear();
 
     if (error != QNetworkReply::NoError) {
-        m_output->append(QStringLiteral("[models] 模型列表获取失败: ") + errorText);
+        m_output->append(QStringLiteral("[models] Failed to fetch model list: ") + errorText);
         return;
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(payload);
     if (!doc.isObject()) {
-        m_output->append(QStringLiteral("[models] 模型列表解析失败: 返回内容不是 JSON 对象"));
+        m_output->append(QStringLiteral("[models] Model list parse failed: response is not a JSON object"));
         return;
     }
 
     const QJsonArray data = doc.object().value(QStringLiteral("data")).toArray();
     if (data.isEmpty()) {
-        m_output->append(QStringLiteral("[models] 模型列表为空，请检查地址、API Key 或服务状态"));
+        m_output->append(QStringLiteral("[models] Model list is empty; check endpoint, API key, or server status"));
         return;
     }
 
@@ -650,11 +728,11 @@ void MultiClientWindow::onModelsReplyFinished()
     }
 
     if (m_modelCombo->count() == 0) {
-        m_output->append(QStringLiteral("[models] 模型列表中没有可用模型 ID"));
+        m_output->append(QStringLiteral("[models] Model list does not contain usable model IDs"));
         return;
     }
 
     const int previousIndex = m_modelCombo->findText(previousModel);
     m_modelCombo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
-    m_output->append(QStringLiteral("[models] 模型列表已更新"));
+    m_output->append(QStringLiteral("[models] Model list updated"));
 }

@@ -13,6 +13,15 @@ namespace qtllm::chat {
 class ConversationClient;
 }
 
+namespace qtllm::tools {
+class LlmToolRegistry;
+class ToolEnabledChatEntry;
+namespace runtime {
+class ToolCatalogRepository;
+class ClientToolPolicyRepository;
+}
+}
+
 namespace qtllm::storage {
 class ConversationRepository;
 }
@@ -23,6 +32,7 @@ class QLineEdit;
 class QTextEdit;
 class QPushButton;
 class QComboBox;
+class QCheckBox;
 class QNetworkAccessManager;
 class QNetworkReply;
 
@@ -53,10 +63,15 @@ private:
     void refreshEditorFromActiveClient(const QSharedPointer<qtllm::chat::ConversationClient> &client);
     bool applyConfigToActiveClient(bool showMessage);
     void refreshModels();
+    void rebuildToolEntryForActiveClient(const QSharedPointer<qtllm::chat::ConversationClient> &client);
 
 private:
     std::shared_ptr<qtllm::storage::ConversationRepository> m_repository;
     std::unique_ptr<qtllm::chat::ConversationClientFactory> m_factory;
+    std::shared_ptr<qtllm::tools::LlmToolRegistry> m_toolRegistry;
+    std::shared_ptr<qtllm::tools::runtime::ToolCatalogRepository> m_toolCatalogRepository;
+    std::shared_ptr<qtllm::tools::runtime::ClientToolPolicyRepository> m_clientPolicyRepository;
+    qtllm::tools::ToolEnabledChatEntry *m_toolEntry;
 
     QListWidget *m_clientList;
     QPushButton *m_newClientButton;
@@ -66,6 +81,7 @@ private:
 
     QTextEdit *m_output;
     QTextEdit *m_input;
+    QCheckBox *m_useToolsCheck;
     QPushButton *m_sendButton;
 
     QComboBox *m_providerCombo;

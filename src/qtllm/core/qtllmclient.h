@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "llmconfig.h"
 #include "llmtypes.h"
@@ -12,6 +12,10 @@ class ILLMProvider;
 class HttpExecutor;
 class StreamChunkParser;
 
+namespace tools::runtime {
+class ToolCallOrchestrator;
+}
+
 class QtLLMClient : public QObject
 {
     Q_OBJECT
@@ -23,16 +27,22 @@ public:
     void setProvider(std::unique_ptr<ILLMProvider> provider);
     bool setProviderByName(const QString &providerName);
 
+    void setToolCallOrchestrator(const std::shared_ptr<tools::runtime::ToolCallOrchestrator> &orchestrator);
+    void setToolLoopContext(const QString &clientId, const QString &sessionId);
+
     void sendPrompt(const QString &prompt);
+    void sendRequest(const LlmRequest &request);
     void cancelCurrentRequest();
 
 signals:
     void tokenReceived(const QString &token);
     void completed(const QString &text);
+    void responseReceived(const LlmResponse &response);
     void errorOccurred(const QString &message);
 
 private:
     void wireExecutor();
+    void dispatchRequest(const LlmRequest &request);
 
 private:
     LlmConfig m_config;
@@ -40,6 +50,10 @@ private:
     HttpExecutor *m_executor;
     std::unique_ptr<StreamChunkParser> m_streamParser;
     QString m_accumulatedText;
+    LlmRequest m_activeRequest;
+    std::shared_ptr<tools::runtime::ToolCallOrchestrator> m_toolOrchestrator;
+    QString m_toolLoopClientId;
+    QString m_toolLoopSessionId;
 };
 
 } // namespace qtllm

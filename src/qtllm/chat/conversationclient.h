@@ -11,6 +11,10 @@ namespace qtllm {
 class ILLMProvider;
 class QtLLMClient;
 
+namespace tools::runtime {
+class ToolCallOrchestrator;
+}
+
 namespace chat {
 
 class ConversationClient : public QObject
@@ -26,6 +30,8 @@ public:
 
     void setProvider(std::unique_ptr<ILLMProvider> provider);
     bool setProviderByName(const QString &providerName);
+
+    void setToolCallOrchestrator(const std::shared_ptr<tools::runtime::ToolCallOrchestrator> &orchestrator);
 
     void setProfile(const profile::ClientProfile &profile);
     profile::ClientProfile profile() const;
@@ -48,6 +54,7 @@ public:
 signals:
     void tokenReceived(const QString &token);
     void completed(const QString &text);
+    void responseReceived(const LlmResponse &response);
     void errorOccurred(const QString &message);
     void historyChanged();
     void sessionsChanged();
@@ -56,7 +63,7 @@ signals:
     void profileChanged();
 
 private:
-    QString buildPromptForNextTurn(const QString &currentUserMessage) const;
+    LlmRequest buildRequestForNextTurn() const;
     void appendMessage(const QString &role, const QString &content);
     int findSessionIndex(const QString &sessionId) const;
     ConversationSessionSnapshot *activeSession();

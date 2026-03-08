@@ -19,7 +19,10 @@ INCLUDEPATH += \
     $$PWD/streaming \
     $$PWD/chat \
     $$PWD/storage \
-    $$PWD/profile
+    $$PWD/profile \
+    $$PWD/tools \
+    $$PWD/tools/runtime \
+    $$PWD/tools/protocol
 
 HEADERS += \
     core/llmconfig.h \
@@ -37,7 +40,25 @@ HEADERS += \
     chat/conversationclientfactory.h \
     storage/conversationrepository.h \
     profile/clientprofile.h \
-    profile/memorypolicy.h
+    profile/memorypolicy.h \
+    tools/llmtooldefinition.h \
+    tools/builtintools.h \
+    tools/llmtoolregistry.h \
+    tools/llmtooladapter.h \
+    tools/toolselectionlayer.h \
+    tools/toolenabledchatentry.h \
+    tools/runtime/toolruntime_types.h \
+    tools/runtime/itoolexecutor.h \
+    tools/runtime/builtinexecutors.h \
+    tools/runtime/toolexecutorregistry.h \
+    tools/runtime/toolruntimehooks.h \
+    tools/runtime/toolexecutionlayer.h \
+    tools/runtime/toolcatalogrepository.h \
+    tools/runtime/clienttoolpolicyrepository.h \
+    tools/runtime/toolcallorchestrator.h \
+    tools/protocol/itoolcallprotocoladapter.h \
+    tools/protocol/providerprotocoladapters.h \
+    tools/protocol/toolcallprotocolrouter.h
 
 SOURCES += \
     core/qtllmclient.cpp \
@@ -49,4 +70,17 @@ SOURCES += \
     streaming/streamchunkparser.cpp \
     chat/conversationclient.cpp \
     chat/conversationclientfactory.cpp \
-    storage/conversationrepository.cpp
+    storage/conversationrepository.cpp \
+    tools/llmtoolregistry.cpp \
+    tools/builtintools.cpp \
+    tools/llmtooladapter.cpp \
+    tools/toolselectionlayer.cpp \
+    tools/toolenabledchatentry.cpp \
+    tools/runtime/toolexecutorregistry.cpp \
+    tools/runtime/builtinexecutors.cpp \
+    tools/runtime/toolexecutionlayer.cpp \
+    tools/runtime/toolcatalogrepository.cpp \
+    tools/runtime/clienttoolpolicyrepository.cpp \
+    tools/runtime/toolcallorchestrator.cpp \
+    tools/protocol/providerprotocoladapters.cpp \
+    tools/protocol/toolcallprotocolrouter.cpp
