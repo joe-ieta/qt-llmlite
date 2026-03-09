@@ -2,11 +2,11 @@
 
 ## Navigation
 
-- [���Ľ���](./INTRODUCTION.zh-CN.md)
+- [中文介绍](./INTRODUCTION.zh-CN.md)
 - [English Introduction](./INTRODUCTION.en.md)
-- [��Ŀ��� / Project Spec](./PROJECT_SPEC.md)
-- [�ܹ�˵�� / Architecture](./ARCHITECTURE.md)
-- [����ǰ��� / Release Checklist](./RELEASE_READINESS_CHECKLIST.md)
+- [项目规格 / Project Spec](./PROJECT_SPEC.md)
+- [架构说明 / Architecture](./ARCHITECTURE.md)
+- [发布前检查 / Release Checklist](./RELEASE_READINESS_CHECKLIST.md)
 
 ## Project Snapshot
 
