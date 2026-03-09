@@ -1,4 +1,4 @@
-# PROJECT_INTRODUCTION / 项目简介
+﻿# PROJECT_INTRODUCTION / 项目简介
 
 ## Summary / 摘要
 qt-llmlite is a lightweight Qt/C++ LLM integration library. The current baseline goes beyond basic chat and includes multi-client conversation persistence and tool runtime orchestration.

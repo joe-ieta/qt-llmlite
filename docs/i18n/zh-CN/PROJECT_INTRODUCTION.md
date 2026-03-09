@@ -1,4 +1,4 @@
-# PROJECT_INTRODUCTION / 项目简介
+﻿# PROJECT_INTRODUCTION / 项目简介
 
 ## 摘要 / Summary
 qt-llmlite 是一个面向 Qt/C++ 的轻量级 LLM 接入库。当前版本已覆盖从基础聊天到多客户端会话与 tools 编排的完整基础能力。

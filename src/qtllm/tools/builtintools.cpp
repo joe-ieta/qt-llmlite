@@ -1,4 +1,4 @@
-#include "builtintools.h"
+﻿#include "builtintools.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -14,7 +14,8 @@ LlmToolDefinition makeCurrentTimeTool()
     tool.toolId = QStringLiteral("current_time");
     tool.name = QStringLiteral("current_time");
     tool.description = QStringLiteral("Get current date/time in local or specified timezone");
-    tool.capabilityTags = QStringList({QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now"), QStringLiteral("时间")});
+    tool.capabilityTags = QStringList(
+        {QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now"), QStringLiteral("ʱ��")});
     tool.category = QStringLiteral("builtin");
     tool.systemBuiltIn = true;
     tool.removable = false;
@@ -38,7 +39,8 @@ LlmToolDefinition makeCurrentWeatherTool()
     tool.toolId = QStringLiteral("current_weather");
     tool.name = QStringLiteral("current_weather");
     tool.description = QStringLiteral("Get current weather by latitude and longitude");
-    tool.capabilityTags = QStringList({QStringLiteral("weather"), QStringLiteral("temperature"), QStringLiteral("天气"), QStringLiteral("气温")});
+    tool.capabilityTags = QStringList(
+        {QStringLiteral("weather"), QStringLiteral("temperature"), QStringLiteral("����"), QStringLiteral("����")});
     tool.category = QStringLiteral("builtin");
     tool.systemBuiltIn = true;
     tool.removable = false;
