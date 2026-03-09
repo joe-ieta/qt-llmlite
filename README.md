@@ -2,74 +2,36 @@
 
 ## 简介 / Introduction
 
-### 中文
-`qt-llmlite` 是一个面向 Qt 开发者的轻量级本地模型接入库。项目基于 Qt/C++ 提供统一客户端与 Provider 抽象，可快速连接 Ollama、vLLM 及其他 OpenAI 兼容接口。它既可作为独立 Qt 包引入，也可按源码级方式集成到现有工程，以较低改造成本完成本地大模型能力接入。
+`qt-llmlite` 是一个面向 Qt/C++ 的轻量级 LLM 接入库，当前版本已从“单客户端基础对话”升级为“可生产扩展的多客户端会话与工具编排底座”。
 
-### English
-`qt-llmlite` is a lightweight local-LLM integration library for Qt developers. It provides a Qt/C++ native client with a provider abstraction to quickly connect to Ollama, vLLM, and other OpenAI-compatible endpoints. The project can be used either as a standalone Qt package or integrated directly at source level into existing applications, enabling fast local model adoption with minimal refactoring cost.
+It now provides not only basic chat integration, but also multi-client/session persistence, tool runtime orchestration, and vendor-mapped protocol support.
 
-## Language Docs
-- English docs: `docs/i18n/en/`
+## 本次版本的主要能力 / What’s New in This Merge
+
+- 多客户端工厂与持久化：按 `clientId` 复用与恢复上下文
+- 单 Client 多会话历史：`active session + historical sessions`
+- Profile 驱动上下文：系统提示、能力、偏好、思维风格
+- Tool 运行时抽象：registry / selection / adapter / execution / policy / catalog
+- `QtLLMClient` 内建 tool loop 状态机（含失败保护，防死循环）
+- 内置不可删除工具：`current_time`、`current_weather`
+- 厂商协议映射：OpenAI / Anthropic / Google + DeepSeek/Qwen/GLM 别名接入
+- 新示例：`multi_client_chat`（并发 client + 历史会话 + tools 入口）
+
+## 核心价值 / Core Value
+
+- 对 Qt 应用低侵入接入 LLM
+- 从 Demo 到产品化演进路径清晰
+- 保持 Provider 抽象边界，便于后续扩展更多模型厂商
+
+## 快速导航 / Quick Navigation
+
+- 项目规格：`PROJECT_SPEC.md`
+- 架构说明：`ARCHITECTURE.md`
+- 发布前检查：`RELEASE_READINESS_CHECKLIST.md`
+- 示例：`src/examples/simple_chat`、`src/examples/multi_client_chat`
 - 中文文档：`docs/i18n/zh-CN/`
-- About snippets: `docs/ABOUT_SNIPPETS.md`
-
-## Tests
-- Unit-test baseline: `tests/qtllm_tests` (Qt Test)
-- Testing guide: `docs/TESTING_BASELINE.md`
-
-## Goals
-- Qt-native C++ implementation
-- Support local and remote LLM services
-- Prefer OpenAI-compatible HTTP APIs
-- Keep dependencies minimal
-- Work well in Qt Creator
-- Remain lightweight and extensible
-
-## What is in this repository
-- `src/qtllm`: C++ Qt library core (`QtLLMClient`, providers, networking, streaming parser)
-- `src/examples/simple_chat`: minimal Qt Widgets chat example
-- `tests/qtllm_tests`: Qt Test unit baseline
-- `docs`: roadmap, decisions, and project introduction
-
-## Build (qmake)
-
-### Open in Qt Creator
-1. Open `qt-llm.pro`
-2. Select your Qt kit
-3. Build `qtllm`, `qtllm_tests`, and `simple_chat`
-
-### Command line
-```bash
-qmake qt-llm.pro
-make
-```
-
-Windows + MinGW:
-```bash
-qmake qt-llm.pro
-mingw32-make
-```
-
-## Repository layout
-```text
-qt-llm/
-  .github/
-  docs/
-  src/
-    examples/simple_chat/
-    qtllm/
-  tests/
-    qtllm_tests/
-  qt-llm.pro
-```
-
-## Notes for contributors and coding agents
-Read in this order before development:
-1. `PROJECT_SPEC.md`
-2. `AI_RULES.md`
-3. `ARCHITECTURE.md`
-4. `CODING_GUIDELINES.md`
-5. `docs/DECISIONS.md`
+- English docs: `docs/i18n/en/`
 
 ## License
+
 MIT. See `LICENSE`.
