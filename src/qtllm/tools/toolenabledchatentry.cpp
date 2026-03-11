@@ -247,7 +247,7 @@ QList<runtime::ToolCallRequest> ToolEnabledChatEntry::planBuiltInToolCalls(const
     }
 
     const bool askTime = containsAny(content,
-                                     QStringList({QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now")}));
+                                     QStringList({QStringLiteral("today"),QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now")}));
     const bool askWeather = containsAny(content,
                                         QStringList({QStringLiteral("weather"), QStringLiteral("temperature")}));
 

@@ -35,7 +35,7 @@ private:
     std::shared_ptr<ToolExecutorRegistry> m_registry;
     std::shared_ptr<ToolRuntimeHooks> m_hooks;
     ToolExecutionPolicy m_policy;
-    bool m_dryRunFailureMode = true;
+    bool m_dryRunFailureMode = false;
 };
 
 } // namespace qtllm::tools::runtime
