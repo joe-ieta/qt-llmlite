@@ -2,6 +2,7 @@
 
 #include "conversationsnapshot.h"
 
+#include <QJsonArray>
 #include <QObject>
 #include <QVector>
 #include <memory>
@@ -47,6 +48,7 @@ public:
     void clearHistory();
 
     void sendUserMessage(const QString &content);
+    void sendUserMessageWithTools(const QString &content, const QJsonArray &tools);
 
     ConversationSnapshot snapshot() const;
     void restoreFromSnapshot(const ConversationSnapshot &snapshot);
@@ -63,7 +65,7 @@ signals:
     void profileChanged();
 
 private:
-    LlmRequest buildRequestForNextTurn() const;
+    LlmRequest buildRequestForNextTurn(const QJsonArray &tools = QJsonArray()) const;
     void appendMessage(const QString &role, const QString &content);
     int findSessionIndex(const QString &sessionId) const;
     ConversationSessionSnapshot *activeSession();
@@ -82,3 +84,5 @@ private:
 
 } // namespace chat
 } // namespace qtllm
+
+

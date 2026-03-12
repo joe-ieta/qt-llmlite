@@ -25,26 +25,6 @@ QString inferVendorFromModelName(const QString &modelName)
         return QString();
     }
 
-    // US major model vendors/families
-    if (containsAny(lowered, QStringList({QStringLiteral("gpt"), QStringLiteral("o1"), QStringLiteral("o3"), QStringLiteral("o4"), QStringLiteral("openai")}))) {
-        return QStringLiteral("openai");
-    }
-    if (containsAny(lowered, QStringList({QStringLiteral("claude"), QStringLiteral("anthropic")}))) {
-        return QStringLiteral("anthropic");
-    }
-    if (containsAny(lowered, QStringList({QStringLiteral("gemini"), QStringLiteral("palm"), QStringLiteral("google")}))) {
-        return QStringLiteral("google");
-    }
-    if (containsAny(lowered, QStringList({QStringLiteral("llama"), QStringLiteral("meta/")}))) {
-        return QStringLiteral("meta");
-    }
-    if (containsAny(lowered, QStringList({QStringLiteral("grok"), QStringLiteral("xai")}))) {
-        return QStringLiteral("xai");
-    }
-    if (containsAny(lowered, QStringList({QStringLiteral("mistral"), QStringLiteral("mixtral"), QStringLiteral("codestral")}))) {
-        return QStringLiteral("mistral");
-    }
-
     // China major model vendors/families
     if (containsAny(lowered, QStringList({QStringLiteral("deepseek")}))) {
         return QStringLiteral("deepseek");
@@ -78,6 +58,26 @@ QString inferVendorFromModelName(const QString &modelName)
     }
     if (containsAny(lowered, QStringList({QStringLiteral("spark"), QStringLiteral("xinghuo"), QStringLiteral("xfyun")}))) {
         return QStringLiteral("xfyun");
+    }
+
+    // US major model vendors/families
+    if (containsAny(lowered, QStringList({QStringLiteral("gpt"), QStringLiteral("o1"), QStringLiteral("o3"), QStringLiteral("o4"), QStringLiteral("openai")}))) {
+        return QStringLiteral("openai");
+    }
+    if (containsAny(lowered, QStringList({QStringLiteral("claude"), QStringLiteral("anthropic")}))) {
+        return QStringLiteral("anthropic");
+    }
+    if (containsAny(lowered, QStringList({QStringLiteral("gemini"), QStringLiteral("palm"), QStringLiteral("google")}))) {
+        return QStringLiteral("google");
+    }
+    if (containsAny(lowered, QStringList({QStringLiteral("llama"), QStringLiteral("meta/")}))) {
+        return QStringLiteral("meta");
+    }
+    if (containsAny(lowered, QStringList({QStringLiteral("grok"), QStringLiteral("xai")}))) {
+        return QStringLiteral("xai");
+    }
+    if (containsAny(lowered, QStringList({QStringLiteral("mistral"), QStringLiteral("mixtral"), QStringLiteral("codestral")}))) {
+        return QStringLiteral("mistral");
     }
 
     return QString();

@@ -10,10 +10,16 @@
 
 #include "../chat/conversationclient.h"
 
+#include <QJsonArray>
 #include <QObject>
 #include <QSharedPointer>
 
 #include <memory>
+
+namespace qtllm::tools::mcp {
+class IMcpClient;
+class McpServerRegistry;
+}
 
 namespace qtllm::tools {
 
@@ -32,6 +38,8 @@ public:
 
     void setExecutionLayer(const std::shared_ptr<runtime::ToolExecutionLayer> &executionLayer);
     void setClientPolicyRepository(const std::shared_ptr<runtime::ClientToolPolicyRepository> &policyRepository);
+    void setMcpClient(const std::shared_ptr<mcp::IMcpClient> &mcpClient);
+    void setMcpServerRegistry(const std::shared_ptr<mcp::McpServerRegistry> &serverRegistry);
     void setTraceContext(const QString &requestId, const QString &traceId);
 
     QList<runtime::ToolExecutionResult> executeToolCalls(const QList<runtime::ToolCallRequest> &requests);
@@ -42,10 +50,8 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
-    QString buildToolAwareMessage(const QString &content) const;
+    QJsonArray selectAndAdaptToolsForTurn(const QString &content) const;
     runtime::ToolExecutionContext buildExecutionContext() const;
-    QList<runtime::ToolCallRequest> planBuiltInToolCalls(const QString &content) const;
-    QJsonArray toToolResultJson(const QList<runtime::ToolExecutionResult> &results) const;
     void onClientResponse(const LlmResponse &response);
 
 private:

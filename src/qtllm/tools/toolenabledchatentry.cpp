@@ -1,61 +1,9 @@
 #include "toolenabledchatentry.h"
 
 #include <QDateTime>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QStringList>
-#include <QTimeZone>
 #include <optional>
 
 namespace qtllm::tools {
-
-namespace {
-
-bool containsAny(const QString &content, const QStringList &terms)
-{
-    const QString lowered = content.toLower();
-    for (const QString &term : terms) {
-        if (lowered.contains(term.toLower())) {
-            return true;
-        }
-    }
-    return false;
-}
-
-QJsonObject inferLocationFromProfile(const profile::ClientProfile &profile)
-{
-    QJsonObject args;
-
-    for (const QString &tag : profile.preferenceTags) {
-        const QString t = tag.trimmed();
-        if (t.startsWith(QStringLiteral("lat="), Qt::CaseInsensitive)) {
-            bool ok = false;
-            const double lat = t.mid(4).toDouble(&ok);
-            if (ok) {
-                args.insert(QStringLiteral("latitude"), lat);
-            }
-        }
-
-        if (t.startsWith(QStringLiteral("lon="), Qt::CaseInsensitive)
-            || t.startsWith(QStringLiteral("lng="), Qt::CaseInsensitive)) {
-            const int pos = t.indexOf('=');
-            bool ok = false;
-            const double lon = t.mid(pos + 1).toDouble(&ok);
-            if (ok) {
-                args.insert(QStringLiteral("longitude"), lon);
-            }
-        }
-
-        if (t.startsWith(QStringLiteral("timezone="), Qt::CaseInsensitive)) {
-            args.insert(QStringLiteral("timezone"), t.mid(QStringLiteral("timezone=").size()));
-        }
-    }
-
-    return args;
-}
-
-} // namespace
 
 ToolEnabledChatEntry::ToolEnabledChatEntry(const QSharedPointer<chat::ConversationClient> &client,
                                            std::shared_ptr<LlmToolRegistry> toolRegistry,
@@ -99,19 +47,8 @@ void ToolEnabledChatEntry::sendUserMessage(const QString &content)
         m_orchestrator->resetSession(m_client->uid(), m_client->activeSessionId());
     }
 
-    const QList<runtime::ToolCallRequest> requests = planBuiltInToolCalls(trimmed);
-    const QList<runtime::ToolExecutionResult> results = executeToolCalls(requests);
-
-    QString prompt = buildToolAwareMessage(trimmed);
-    if (!results.isEmpty()) {
-        QStringList lines;
-        lines.append(prompt);
-        lines.append(QStringLiteral("[tool-results]"));
-        lines.append(QString::fromUtf8(QJsonDocument(toToolResultJson(results)).toJson(QJsonDocument::Compact)));
-        prompt = lines.join(QStringLiteral("\n\n"));
-    }
-
-    m_client->sendUserMessage(prompt);
+    const QJsonArray tools = selectAndAdaptToolsForTurn(trimmed);
+    m_client->sendUserMessageWithTools(trimmed, tools);
 }
 
 void ToolEnabledChatEntry::setToolSelectionLayer(ToolSelectionLayer selectionLayer)
@@ -142,6 +79,20 @@ void ToolEnabledChatEntry::setClientPolicyRepository(
     m_clientPolicyRepository = policyRepository;
     if (m_orchestrator) {
         m_orchestrator->setPolicyRepository(policyRepository);
+    }
+}
+
+void ToolEnabledChatEntry::setMcpClient(const std::shared_ptr<mcp::IMcpClient> &mcpClient)
+{
+    if (m_executionLayer) {
+        m_executionLayer->setMcpClient(mcpClient);
+    }
+}
+
+void ToolEnabledChatEntry::setMcpServerRegistry(const std::shared_ptr<mcp::McpServerRegistry> &serverRegistry)
+{
+    if (m_executionLayer) {
+        m_executionLayer->setMcpServerRegistry(serverRegistry);
     }
 }
 
@@ -178,15 +129,15 @@ QList<runtime::ToolExecutionResult> ToolEnabledChatEntry::executeToolCalls(
     return m_executionLayer->executeBatch(requests, buildExecutionContext(), policy);
 }
 
-QString ToolEnabledChatEntry::buildToolAwareMessage(const QString &content) const
+QJsonArray ToolEnabledChatEntry::selectAndAdaptToolsForTurn(const QString &content) const
 {
-    if (!m_toolRegistry || !m_toolAdapter) {
-        return content;
+    if (!m_client || !m_toolRegistry || !m_toolAdapter) {
+        return QJsonArray();
     }
 
     QList<LlmToolDefinition> available = m_toolRegistry->enabledTools();
 
-    if (m_clientPolicyRepository && m_client) {
+    if (m_clientPolicyRepository) {
         const std::optional<runtime::ClientToolPolicy> policy =
             m_clientPolicyRepository->loadPolicy(m_client->uid(), nullptr);
 
@@ -202,23 +153,19 @@ QString ToolEnabledChatEntry::buildToolAwareMessage(const QString &content) cons
         }
     }
 
-    const QList<LlmToolDefinition> candidates = m_selectionLayer.selectTools(
-        m_client->profile(), m_client->history(), available);
+    QVector<LlmMessage> historyWindow = m_client->history();
+    LlmMessage turnUserMessage;
+    turnUserMessage.role = QStringLiteral("user");
+    turnUserMessage.content = content;
+    historyWindow.append(turnUserMessage);
 
+    const QList<LlmToolDefinition> candidates =
+        m_selectionLayer.selectTools(m_client->profile(), historyWindow, available);
     if (candidates.isEmpty()) {
-        return content;
+        return QJsonArray();
     }
 
-    const QString providerName = m_client->config().providerName;
-    const QJsonArray adapted = m_toolAdapter->adaptTools(candidates, providerName);
-
-    QStringList lines;
-    lines.append(QStringLiteral("[tool-selection]"));
-    lines.append(QStringLiteral("The following tools are available for this turn."));
-    lines.append(QString::fromUtf8(QJsonDocument(adapted).toJson(QJsonDocument::Compact)));
-    lines.append(QStringLiteral("[user-message]"));
-    lines.append(content);
-    return lines.join(QStringLiteral("\n\n"));
+    return m_toolAdapter->adaptTools(candidates, m_client->config().providerName);
 }
 
 runtime::ToolExecutionContext ToolEnabledChatEntry::buildExecutionContext() const
@@ -239,61 +186,11 @@ runtime::ToolExecutionContext ToolEnabledChatEntry::buildExecutionContext() cons
     return context;
 }
 
-QList<runtime::ToolCallRequest> ToolEnabledChatEntry::planBuiltInToolCalls(const QString &content) const
-{
-    QList<runtime::ToolCallRequest> requests;
-    if (!m_client) {
-        return requests;
-    }
-
-    const bool askTime = containsAny(content,
-                                     QStringList({QStringLiteral("today"),QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now")}));
-    const bool askWeather = containsAny(content,
-                                        QStringList({QStringLiteral("weather"), QStringLiteral("temperature")}));
-
-    if (askTime) {
-        runtime::ToolCallRequest call;
-        call.callId = QStringLiteral("time-") + QString::number(QDateTime::currentMSecsSinceEpoch());
-        call.toolId = QStringLiteral("current_time");
-        call.arguments.insert(QStringLiteral("timezone"), QString::fromUtf8(QTimeZone::systemTimeZoneId()));
-        requests.append(call);
-    }
-
-    if (askWeather) {
-        runtime::ToolCallRequest call;
-        call.callId = QStringLiteral("weather-") + QString::number(QDateTime::currentMSecsSinceEpoch());
-        call.toolId = QStringLiteral("current_weather");
-        call.arguments = inferLocationFromProfile(m_client->profile());
-        requests.append(call);
-    }
-
-    return requests;
-}
-
-QJsonArray ToolEnabledChatEntry::toToolResultJson(const QList<runtime::ToolExecutionResult> &results) const
-{
-    QJsonArray array;
-    for (const runtime::ToolExecutionResult &result : results) {
-        QJsonObject item;
-        item.insert(QStringLiteral("callId"), result.callId);
-        item.insert(QStringLiteral("toolId"), result.toolId);
-        item.insert(QStringLiteral("success"), result.success);
-        item.insert(QStringLiteral("durationMs"), static_cast<double>(result.durationMs));
-        if (result.success) {
-            item.insert(QStringLiteral("output"), result.output);
-        } else {
-            item.insert(QStringLiteral("errorCode"), result.errorCode);
-            item.insert(QStringLiteral("errorMessage"), result.errorMessage);
-            item.insert(QStringLiteral("retryable"), result.retryable);
-        }
-        array.append(item);
-    }
-    return array;
-}
-
 void ToolEnabledChatEntry::onClientResponse(const LlmResponse &response)
 {
     const QString text = response.assistantMessage.content.isEmpty() ? response.text : response.assistantMessage.content;
     emit completed(text);
 }
+
 } // namespace qtllm::tools
+

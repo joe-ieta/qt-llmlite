@@ -1,6 +1,16 @@
 #include "llmtoolregistry.h"
 
+#include "builtintools.h"
+
 namespace qtllm::tools {
+
+LlmToolRegistry::LlmToolRegistry()
+{
+    const QList<LlmToolDefinition> defaults = builtInTools();
+    for (const LlmToolDefinition &tool : defaults) {
+        registerTool(tool);
+    }
+}
 
 bool LlmToolRegistry::registerTool(const LlmToolDefinition &tool)
 {
@@ -37,12 +47,17 @@ bool LlmToolRegistry::unregisterTool(const QString &toolId)
 void LlmToolRegistry::clear()
 {
     m_tools.clear();
+    const QList<LlmToolDefinition> defaults = builtInTools();
+    for (const LlmToolDefinition &tool : defaults) {
+        registerTool(tool);
+    }
 }
 
 void LlmToolRegistry::replaceAll(const QList<LlmToolDefinition> &tools)
 {
     m_tools.clear();
-    for (const LlmToolDefinition &tool : tools) {
+    const QList<LlmToolDefinition> merged = mergeWithBuiltInTools(tools);
+    for (const LlmToolDefinition &tool : merged) {
         if (!tool.toolId.trimmed().isEmpty()) {
             registerTool(tool);
         }

@@ -22,7 +22,8 @@ INCLUDEPATH += \
     $$PWD/profile \
     $$PWD/tools \
     $$PWD/tools/runtime \
-    $$PWD/tools/protocol
+    $$PWD/tools/protocol \
+    $$PWD/tools/mcp
 
 HEADERS += \
     core/llmconfig.h \
@@ -58,7 +59,14 @@ HEADERS += \
     tools/runtime/toolcallorchestrator.h \
     tools/protocol/itoolcallprotocoladapter.h \
     tools/protocol/providerprotocoladapters.h \
-    tools/protocol/toolcallprotocolrouter.h
+    tools/protocol/toolcallprotocolrouter.h \
+    tools/mcp/mcp_types.h \
+    tools/mcp/mcpserverregistry.h \
+    tools/mcp/mcpserverrepository.h \
+    tools/mcp/imcpclient.h \
+    tools/mcp/defaultmcpclient.h \
+    tools/mcp/mcptoolsyncservice.h \
+    tools/mcp/mcpservermanager.h
 
 SOURCES += \
     core/qtllmclient.cpp \
@@ -83,4 +91,10 @@ SOURCES += \
     tools/runtime/clienttoolpolicyrepository.cpp \
     tools/runtime/toolcallorchestrator.cpp \
     tools/protocol/providerprotocoladapters.cpp \
-    tools/protocol/toolcallprotocolrouter.cpp
+    tools/protocol/toolcallprotocolrouter.cpp \
+    tools/mcp/mcpserverregistry.cpp \
+    tools/mcp/mcpserverrepository.cpp \
+    tools/mcp/defaultmcpclient.cpp \
+    tools/mcp/mcptoolsyncservice.cpp \
+    tools/mcp/mcpservermanager.cpp
+

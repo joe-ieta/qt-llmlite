@@ -199,6 +199,11 @@ void ConversationClient::clearHistory()
 
 void ConversationClient::sendUserMessage(const QString &content)
 {
+    sendUserMessageWithTools(content, QJsonArray());
+}
+
+void ConversationClient::sendUserMessageWithTools(const QString &content, const QJsonArray &tools)
+{
     const QString trimmed = content.trimmed();
     if (trimmed.isEmpty()) {
         return;
@@ -207,7 +212,7 @@ void ConversationClient::sendUserMessage(const QString &content)
     appendMessage(QStringLiteral("user"), trimmed);
     m_pendingAssistantText.clear();
     m_llmClient->setToolLoopContext(m_uid, m_activeSessionId);
-    m_llmClient->sendRequest(buildRequestForNextTurn());
+    m_llmClient->sendRequest(buildRequestForNextTurn(tools));
 }
 
 ConversationSnapshot ConversationClient::snapshot() const
@@ -235,7 +240,7 @@ void ConversationClient::restoreFromSnapshot(const ConversationSnapshot &snapsho
     emit historyChanged();
 }
 
-LlmRequest ConversationClient::buildRequestForNextTurn() const
+LlmRequest ConversationClient::buildRequestForNextTurn(const QJsonArray &tools) const
 {
     LlmRequest request;
     request.model = m_config.model;
@@ -261,6 +266,8 @@ LlmRequest ConversationClient::buildRequestForNextTurn() const
         thinking.content = QStringLiteral("Thinking style: ") + m_profile.thinkingStyle.trimmed();
         request.messages.append(thinking);
     }
+
+    request.tools = tools;
 
     const QVector<LlmMessage> messages = history();
     const int maxMessages = qMax(1, m_profile.memoryPolicy.maxHistoryMessages);
@@ -336,3 +343,4 @@ void ConversationClient::ensureAtLeastOneSession()
 }
 
 } // namespace qtllm::chat
+

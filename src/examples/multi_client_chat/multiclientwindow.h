@@ -20,6 +20,10 @@ namespace runtime {
 class ToolCatalogRepository;
 class ClientToolPolicyRepository;
 }
+namespace mcp {
+class McpServerManager;
+class McpToolSyncService;
+}
 }
 
 namespace qtllm::storage {
@@ -71,6 +75,8 @@ private:
     std::shared_ptr<qtllm::tools::LlmToolRegistry> m_toolRegistry;
     std::shared_ptr<qtllm::tools::runtime::ToolCatalogRepository> m_toolCatalogRepository;
     std::shared_ptr<qtllm::tools::runtime::ClientToolPolicyRepository> m_clientPolicyRepository;
+    std::shared_ptr<qtllm::tools::mcp::McpServerManager> m_mcpServerManager;
+    std::shared_ptr<qtllm::tools::mcp::McpToolSyncService> m_mcpToolSyncService;
     qtllm::tools::ToolEnabledChatEntry *m_toolEntry;
 
     QListWidget *m_clientList;

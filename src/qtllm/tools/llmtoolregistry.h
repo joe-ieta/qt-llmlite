@@ -11,6 +11,8 @@ namespace qtllm::tools {
 class LlmToolRegistry
 {
 public:
+    LlmToolRegistry();
+
     bool registerTool(const LlmToolDefinition &tool);
     bool unregisterTool(const QString &toolId);
     void clear();

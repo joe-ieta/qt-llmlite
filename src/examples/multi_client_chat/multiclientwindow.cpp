@@ -16,6 +16,8 @@
 #include "../../qtllm/tools/runtime/clienttoolpolicyrepository.h"
 #include "../../qtllm/tools/runtime/toolcatalogrepository.h"
 #include "../../qtllm/tools/runtime/toolruntime_types.h"
+#include "../../qtllm/tools/mcp/mcpservermanager.h"
+#include "../../qtllm/tools/mcp/mcptoolsyncservice.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -142,6 +144,8 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     , m_toolRegistry(std::make_shared<qtllm::tools::LlmToolRegistry>())
     , m_toolCatalogRepository(std::make_shared<qtllm::tools::runtime::ToolCatalogRepository>())
     , m_clientPolicyRepository(std::make_shared<qtllm::tools::runtime::ClientToolPolicyRepository>())
+    , m_mcpServerManager(std::make_shared<qtllm::tools::mcp::McpServerManager>())
+    , m_mcpToolSyncService(std::make_shared<qtllm::tools::mcp::McpToolSyncService>(m_toolRegistry, m_mcpServerManager ? m_mcpServerManager->registry() : nullptr))
     , m_toolEntry(nullptr)
     , m_clientList(new QListWidget(this))
     , m_newClientButton(new QPushButton(QStringLiteral("New Client"), this))
@@ -182,6 +186,22 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     }
 
     ensureDefaultTools(m_toolRegistry, &changedCatalog);
+
+    if (m_mcpServerManager) {
+        m_mcpServerManager->load(nullptr);
+    }
+
+    if (m_mcpToolSyncService && m_mcpServerManager) {
+        const QVector<qtllm::tools::mcp::McpServerDefinition> servers = m_mcpServerManager->allServers();
+        for (const qtllm::tools::mcp::McpServerDefinition &server : servers) {
+            if (!server.enabled) {
+                continue;
+            }
+            if (m_mcpToolSyncService->syncServerTools(server.serverId, nullptr)) {
+                changedCatalog = true;
+            }
+        }
+    }
 
     if (changedCatalog && m_toolCatalogRepository) {
         qtllm::tools::runtime::ToolCatalogSnapshot snapshot;
@@ -576,6 +596,9 @@ void MultiClientWindow::rebuildToolEntryForActiveClient(const QSharedPointer<qtl
     if (m_clientPolicyRepository) {
         m_toolEntry->setClientPolicyRepository(m_clientPolicyRepository);
     }
+    if (m_mcpServerManager) {
+        m_toolEntry->setMcpServerRegistry(m_mcpServerManager->registry());
+    }
 }
 
 void MultiClientWindow::onNewClientClicked()
@@ -736,3 +759,4 @@ void MultiClientWindow::onModelsReplyFinished()
     m_modelCombo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
     m_output->append(QStringLiteral("[models] Model list updated"));
 }
+
