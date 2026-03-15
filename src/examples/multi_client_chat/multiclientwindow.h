@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include "../../qtllm/chat/conversationclientfactory.h"
+#include "../../qtllm/logging/logtypes.h"
 
 #include <QMetaObject>
 #include <QPointer>
@@ -11,6 +12,10 @@
 
 namespace qtllm::chat {
 class ConversationClient;
+}
+
+namespace qtllm::logging {
+class SignalLogSink;
 }
 
 namespace qtllm::tools {
@@ -37,6 +42,7 @@ class QTextEdit;
 class QPushButton;
 class QComboBox;
 class QCheckBox;
+class QTabWidget;
 class QNetworkAccessManager;
 class QNetworkReply;
 
@@ -45,6 +51,7 @@ class MultiClientWindow : public QWidget
     Q_OBJECT
 public:
     explicit MultiClientWindow(QWidget *parent = nullptr);
+    ~MultiClientWindow() override;
 
 private slots:
     void onNewClientClicked();
@@ -56,6 +63,7 @@ private slots:
     void onApplyConfigClicked();
     void onRefreshModelsClicked();
     void onModelsReplyFinished();
+    void onLogEventReceived(const qtllm::logging::LogEvent &event);
 
 private:
     QSharedPointer<qtllm::chat::ConversationClient> activeClient() const;
@@ -68,6 +76,8 @@ private:
     bool applyConfigToActiveClient(bool showMessage);
     void refreshModels();
     void rebuildToolEntryForActiveClient(const QSharedPointer<qtllm::chat::ConversationClient> &client);
+    bool shouldDisplayLogEvent(const qtllm::logging::LogEvent &event) const;
+    void appendRuntimeLog(const QString &line);
 
 private:
     std::shared_ptr<qtllm::storage::ConversationRepository> m_repository;
@@ -77,6 +87,7 @@ private:
     std::shared_ptr<qtllm::tools::runtime::ClientToolPolicyRepository> m_clientPolicyRepository;
     std::shared_ptr<qtllm::tools::mcp::McpServerManager> m_mcpServerManager;
     std::shared_ptr<qtllm::tools::mcp::McpToolSyncService> m_mcpToolSyncService;
+    std::shared_ptr<qtllm::logging::SignalLogSink> m_logSink;
     qtllm::tools::ToolEnabledChatEntry *m_toolEntry;
 
     QListWidget *m_clientList;
@@ -85,7 +96,14 @@ private:
     QListWidget *m_sessionList;
     QPushButton *m_newSessionButton;
 
+    QTabWidget *m_centerTabs;
     QTextEdit *m_output;
+    QComboBox *m_logLevelFilter;
+    QLineEdit *m_logCategoryFilter;
+    QLineEdit *m_logClientIdFilter;
+    QLineEdit *m_logSessionIdFilter;
+    QLineEdit *m_logRequestIdFilter;
+    QTextEdit *m_runtimeLog;
     QTextEdit *m_input;
     QCheckBox *m_useToolsCheck;
     QPushButton *m_sendButton;
@@ -115,3 +133,5 @@ private:
     QMetaObject::Connection m_sessionsConn;
     QMetaObject::Connection m_activeSessionConn;
 };
+
+

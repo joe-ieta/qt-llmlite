@@ -1,12 +1,16 @@
-#include "multiclientwindow.h"
+﻿#include "multiclientwindow.h"
 
 #include "../../qtllm/chat/conversationclient.h"
 #include "../../qtllm/chat/conversationclientfactory.h"
 #include "../../qtllm/core/llmconfig.h"
 #include "../../qtllm/core/llmtypes.h"
+#include "../../qtllm/logging/logtypes.h"
+#include "../../qtllm/logging/qtllmlogger.h"
+#include "../../qtllm/logging/signallogsink.h"
 #include "../../qtllm/profile/clientprofile.h"
 #include "../../qtllm/providers/illmprovider.h"
 #include "../../qtllm/providers/ollamaprovider.h"
+#include "../../qtllm/providers/openaiprovider.h"
 #include "../../qtllm/providers/openaicompatibleprovider.h"
 #include "../../qtllm/providers/vllmprovider.h"
 #include "../../qtllm/storage/conversationrepository.h"
@@ -37,6 +41,7 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QTextCursor>
+#include <QTabWidget>
 #include <QTextEdit>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -85,6 +90,9 @@ std::unique_ptr<qtllm::ILLMProvider> createProviderById(const QString &providerI
     if (providerId == QStringLiteral("vllm")) {
         return std::make_unique<qtllm::VllmProvider>();
     }
+    if (providerId == QStringLiteral("openai")) {
+        return std::make_unique<qtllm::OpenAIProvider>();
+    }
     return std::make_unique<qtllm::OpenAICompatibleProvider>();
 }
 
@@ -112,6 +120,27 @@ QStringList parseTags(const QString &input)
     return parts;
 }
 
+QString formatLogEvent(const qtllm::logging::LogEvent &event)
+{
+    QString line = QStringLiteral("[%1][%2][%3]")
+                       .arg(event.timestampUtc.toString(QStringLiteral("HH:mm:ss.zzz")),
+                            qtllm::logging::logLevelToString(event.level),
+                            event.category);
+    if (!event.clientId.isEmpty()) {
+        line += QStringLiteral("[client=%1]").arg(event.clientId);
+    }
+    if (!event.sessionId.isEmpty()) {
+        line += QStringLiteral("[session=%1]").arg(event.sessionId);
+    }
+    if (!event.requestId.isEmpty()) {
+        line += QStringLiteral("[request=%1]").arg(event.requestId);
+    }
+    line += QStringLiteral(" ") + event.message;
+    if (!event.fields.isEmpty()) {
+        line += QStringLiteral(" ") + QString::fromUtf8(QJsonDocument(event.fields).toJson(QJsonDocument::Compact));
+    }
+    return line;
+}
 QString joinTags(const QStringList &tags)
 {
     return tags.join(QStringLiteral(", "));
@@ -146,12 +175,20 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     , m_clientPolicyRepository(std::make_shared<qtllm::tools::runtime::ClientToolPolicyRepository>())
     , m_mcpServerManager(std::make_shared<qtllm::tools::mcp::McpServerManager>())
     , m_mcpToolSyncService(std::make_shared<qtllm::tools::mcp::McpToolSyncService>(m_toolRegistry, m_mcpServerManager ? m_mcpServerManager->registry() : nullptr))
+    , m_logSink(std::make_shared<qtllm::logging::SignalLogSink>())
     , m_toolEntry(nullptr)
     , m_clientList(new QListWidget(this))
     , m_newClientButton(new QPushButton(QStringLiteral("New Client"), this))
     , m_sessionList(new QListWidget(this))
     , m_newSessionButton(new QPushButton(QStringLiteral("New Session"), this))
+    , m_centerTabs(new QTabWidget(this))
     , m_output(new QTextEdit(this))
+    , m_logLevelFilter(new QComboBox(this))
+    , m_logCategoryFilter(new QLineEdit(this))
+    , m_logClientIdFilter(new QLineEdit(this))
+    , m_logSessionIdFilter(new QLineEdit(this))
+    , m_logRequestIdFilter(new QLineEdit(this))
+    , m_runtimeLog(new QTextEdit(this))
     , m_input(new QTextEdit(this))
     , m_useToolsCheck(new QCheckBox(QStringLiteral("Use Tools Entry"), this))
     , m_sendButton(new QPushButton(QStringLiteral("Send"), this))
@@ -214,9 +251,19 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
 
     m_systemPromptEdit->setPlaceholderText(QStringLiteral("System prompt"));
     m_output->setReadOnly(true);
+    m_runtimeLog->setReadOnly(true);
     m_input->setPlaceholderText(QStringLiteral("Input message"));
     m_apiKeyEdit->setEchoMode(QLineEdit::Password);
     m_modelCombo->setEditable(false);
+    m_logLevelFilter->addItems(QStringList({QStringLiteral("debug+"), QStringLiteral("info+"), QStringLiteral("warn+"), QStringLiteral("error")}));
+    m_logCategoryFilter->setPlaceholderText(QStringLiteral("category contains..."));
+    m_logClientIdFilter->setPlaceholderText(QStringLiteral("clientId contains..."));
+    m_logSessionIdFilter->setPlaceholderText(QStringLiteral("sessionId contains..."));
+    m_logRequestIdFilter->setPlaceholderText(QStringLiteral("requestId contains..."));
+
+    qtllm::logging::QtLlmLogger::instance().addSink(m_logSink);
+    connect(m_logSink.get(), &qtllm::logging::SignalLogSink::logEventReceived,
+            this, &MultiClientWindow::onLogEventReceived);
 
     for (const ProviderOption &option : providerOptions()) {
         m_providerCombo->addItem(option.title, option.id);
@@ -232,12 +279,34 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     auto *leftPane = new QWidget(this);
     leftPane->setLayout(leftLayout);
 
-    auto *centerLayout = new QVBoxLayout();
-    centerLayout->addWidget(m_output, 1);
-    centerLayout->addWidget(m_input);
-    centerLayout->addWidget(m_useToolsCheck);
-    centerLayout->addWidget(m_sendButton);
+    auto *chatLayout = new QVBoxLayout();
+    chatLayout->addWidget(m_output, 1);
+    chatLayout->addWidget(m_input);
+    chatLayout->addWidget(m_useToolsCheck);
+    chatLayout->addWidget(m_sendButton);
+    auto *chatPane = new QWidget(this);
+    chatPane->setLayout(chatLayout);
 
+    auto *logFilterRow = new QHBoxLayout();
+    logFilterRow->addWidget(new QLabel(QStringLiteral("Level"), this));
+    logFilterRow->addWidget(m_logLevelFilter);
+    logFilterRow->addWidget(new QLabel(QStringLiteral("Category"), this));
+    logFilterRow->addWidget(m_logCategoryFilter, 1);
+    logFilterRow->addWidget(new QLabel(QStringLiteral("Client"), this));
+    logFilterRow->addWidget(m_logClientIdFilter, 1);
+    logFilterRow->addWidget(new QLabel(QStringLiteral("Session"), this));
+    logFilterRow->addWidget(m_logSessionIdFilter, 1);
+    logFilterRow->addWidget(new QLabel(QStringLiteral("Request"), this));
+    logFilterRow->addWidget(m_logRequestIdFilter, 1);
+
+    auto *runtimeLogLayout = new QVBoxLayout();
+    runtimeLogLayout->addLayout(logFilterRow);
+    runtimeLogLayout->addWidget(m_runtimeLog, 1);
+    auto *runtimeLogPane = new QWidget(this);
+    runtimeLogPane->setLayout(runtimeLogLayout);
+
+    m_centerTabs->addTab(chatPane, QStringLiteral("Chat"));
+    m_centerTabs->addTab(runtimeLogPane, QStringLiteral("Runtime Log"));
     auto *modelRowLayout = new QHBoxLayout();
     modelRowLayout->addWidget(m_modelCombo, 1);
     modelRowLayout->addWidget(m_reloadModelsButton, 0);
@@ -266,9 +335,10 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     auto *rightPane = new QWidget(this);
     rightPane->setLayout(rightLayout);
 
+    auto *centerLayout = new QVBoxLayout();
+    centerLayout->addWidget(m_centerTabs);
     auto *centerPane = new QWidget(this);
     centerPane->setLayout(centerLayout);
-
     auto *splitter = new QSplitter(this);
     splitter->addWidget(leftPane);
     splitter->addWidget(centerPane);
@@ -304,6 +374,11 @@ MultiClientWindow::MultiClientWindow(QWidget *parent)
     connect(m_apiKeyEdit, &QLineEdit::editingFinished, this, &MultiClientWindow::onRefreshModelsClicked);
 
     loadClients();
+}
+
+MultiClientWindow::~MultiClientWindow()
+{
+    qtllm::logging::QtLlmLogger::instance().removeSink(m_logSink);
 }
 
 QSharedPointer<qtllm::chat::ConversationClient> MultiClientWindow::activeClient() const
@@ -618,12 +693,20 @@ void MultiClientWindow::onNewClientClicked()
 
 void MultiClientWindow::onClientSelectionChanged()
 {
+    if (m_runtimeLog) {
+        m_runtimeLog->clear();
+    }
+
     const QSharedPointer<qtllm::chat::ConversationClient> client = activeClient();
     bindActiveClient(client);
     rebuildSessionList(client);
     renderActiveHistory(client);
     refreshEditorFromActiveClient(client);
     rebuildToolEntryForActiveClient(client);
+
+    if (client) {
+        appendRuntimeLog(QStringLiteral("[client] active=") + client->uid());
+    }
 }
 
 void MultiClientWindow::onNewSessionClicked()
@@ -759,4 +842,74 @@ void MultiClientWindow::onModelsReplyFinished()
     m_modelCombo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
     m_output->append(QStringLiteral("[models] Model list updated"));
 }
+
+void MultiClientWindow::onLogEventReceived(const qtllm::logging::LogEvent &event)
+{
+    if (!shouldDisplayLogEvent(event)) {
+        return;
+    }
+
+    appendRuntimeLog(formatLogEvent(event));
+}
+
+bool MultiClientWindow::shouldDisplayLogEvent(const qtllm::logging::LogEvent &event) const
+{
+    int minimumLevel = static_cast<int>(qtllm::logging::LogLevel::Debug);
+    const QString levelFilter = m_logLevelFilter ? m_logLevelFilter->currentText().trimmed().toLower() : QStringLiteral("debug+");
+    if (levelFilter == QStringLiteral("info+")) {
+        minimumLevel = static_cast<int>(qtllm::logging::LogLevel::Info);
+    } else if (levelFilter == QStringLiteral("warn+")) {
+        minimumLevel = static_cast<int>(qtllm::logging::LogLevel::Warn);
+    } else if (levelFilter == QStringLiteral("error")) {
+        minimumLevel = static_cast<int>(qtllm::logging::LogLevel::Error);
+    }
+
+    if (static_cast<int>(event.level) < minimumLevel) {
+        return false;
+    }
+
+    const QString categoryFilter = m_logCategoryFilter ? m_logCategoryFilter->text().trimmed() : QString();
+    if (!categoryFilter.isEmpty() && !event.category.contains(categoryFilter, Qt::CaseInsensitive)) {
+        return false;
+    }
+
+    const QString clientIdFilter = m_logClientIdFilter ? m_logClientIdFilter->text().trimmed() : QString();
+    if (!clientIdFilter.isEmpty()) {
+        if (!event.clientId.contains(clientIdFilter, Qt::CaseInsensitive)) {
+            return false;
+        }
+    } else {
+        const QSharedPointer<qtllm::chat::ConversationClient> client = activeClient();
+        if (client) {
+            const QString activeClientId = client->uid();
+            if (!event.clientId.isEmpty() && event.clientId != activeClientId) {
+                return false;
+            }
+        }
+    }
+
+    const QString sessionIdFilter = m_logSessionIdFilter ? m_logSessionIdFilter->text().trimmed() : QString();
+    if (!sessionIdFilter.isEmpty() && !event.sessionId.contains(sessionIdFilter, Qt::CaseInsensitive)) {
+        return false;
+    }
+
+    const QString requestIdFilter = m_logRequestIdFilter ? m_logRequestIdFilter->text().trimmed() : QString();
+    if (!requestIdFilter.isEmpty() && !event.requestId.contains(requestIdFilter, Qt::CaseInsensitive)) {
+        return false;
+    }
+
+    return event.category.startsWith(QStringLiteral("tool."))
+        || event.category.startsWith(QStringLiteral("mcp."))
+        || event.category.startsWith(QStringLiteral("llm."))
+        || event.category.startsWith(QStringLiteral("ui.multi_client"));
+}
+
+void MultiClientWindow::appendRuntimeLog(const QString &line)
+{
+    if (!m_runtimeLog || line.isEmpty()) {
+        return;
+    }
+    m_runtimeLog->append(line);
+}
+
 

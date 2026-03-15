@@ -23,13 +23,15 @@ INCLUDEPATH += \
     $$PWD/tools \
     $$PWD/tools/runtime \
     $$PWD/tools/protocol \
-    $$PWD/tools/mcp
+    $$PWD/tools/mcp \
+    $$PWD/logging
 
 HEADERS += \
     core/llmconfig.h \
     core/llmtypes.h \
     core/qtllmclient.h \
     providers/illmprovider.h \
+    providers/openaiprovider.h \
     providers/openaicompatibleprovider.h \
     providers/ollamaprovider.h \
     providers/providerfactory.h \
@@ -66,10 +68,16 @@ HEADERS += \
     tools/mcp/imcpclient.h \
     tools/mcp/defaultmcpclient.h \
     tools/mcp/mcptoolsyncservice.h \
-    tools/mcp/mcpservermanager.h
+    tools/mcp/mcpservermanager.h \
+    logging/logtypes.h \
+    logging/ilogsink.h \
+    logging/filelogsink.h \
+    logging/signallogsink.h \
+    logging/qtllmlogger.h
 
 SOURCES += \
     core/qtllmclient.cpp \
+    providers/openaiprovider.cpp \
     providers/openaicompatibleprovider.cpp \
     providers/ollamaprovider.cpp \
     providers/providerfactory.cpp \
@@ -96,5 +104,8 @@ SOURCES += \
     tools/mcp/mcpserverrepository.cpp \
     tools/mcp/defaultmcpclient.cpp \
     tools/mcp/mcptoolsyncservice.cpp \
-    tools/mcp/mcpservermanager.cpp
-
+    tools/mcp/mcpservermanager.cpp \
+    logging/logtypes.cpp \
+    logging/filelogsink.cpp \
+    logging/signallogsink.cpp \
+    logging/qtllmlogger.cpp

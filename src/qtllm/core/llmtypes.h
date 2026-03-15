@@ -47,4 +47,10 @@ struct LlmResponse
     QString finishReason;
 };
 
+struct LlmStreamDelta
+{
+    QString channel = QStringLiteral("content");
+    QString text;
+};
+
 } // namespace qtllm

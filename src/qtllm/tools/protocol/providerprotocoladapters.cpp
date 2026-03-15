@@ -1,4 +1,4 @@
-#include "providerprotocoladapters.h"
+﻿#include "providerprotocoladapters.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -93,7 +93,7 @@ QString buildEmptyToolResultPrompt(const QString &assistantText,
     lines.append(QStringLiteral("[tool-loop]"));
     lines.append(QStringLiteral("adapter=") + adapterId);
     lines.append(QStringLiteral("tool_results=") + QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact)));
-    lines.append(QStringLiteral("Continue without relying on tool results if they are empty."));
+    lines.append(QStringLiteral("Continue by integrating the tool results above."));
     return lines.join(QStringLiteral("\n"));
 }
 
@@ -172,3 +172,4 @@ QString GenericToolCallProtocolAdapter::buildFollowUpPrompt(const QString &assis
 }
 
 } // namespace qtllm::tools::protocol
+

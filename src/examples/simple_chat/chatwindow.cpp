@@ -4,6 +4,7 @@
 #include "../../qtllm/core/qtllmclient.h"
 #include "../../qtllm/providers/illmprovider.h"
 #include "../../qtllm/providers/ollamaprovider.h"
+#include "../../qtllm/providers/openaiprovider.h"
 #include "../../qtllm/providers/openaicompatibleprovider.h"
 #include "../../qtllm/providers/vllmprovider.h"
 
@@ -67,6 +68,9 @@ std::unique_ptr<qtllm::ILLMProvider> createProviderById(const QString &providerI
     }
     if (providerId == QStringLiteral("vllm")) {
         return std::make_unique<qtllm::VllmProvider>();
+    }
+    if (providerId == QStringLiteral("openai")) {
+        return std::make_unique<qtllm::OpenAIProvider>();
     }
     return std::make_unique<qtllm::OpenAICompatibleProvider>();
 }
@@ -375,3 +379,5 @@ QString ChatWindow::selectedProviderId() const
 {
     return m_providerCombo->currentData().toString();
 }
+
+

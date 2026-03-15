@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "conversationsnapshot.h"
 
@@ -55,9 +55,12 @@ public:
 
 signals:
     void tokenReceived(const QString &token);
+    void reasoningTokenReceived(const QString &token);
     void completed(const QString &text);
     void responseReceived(const LlmResponse &response);
     void errorOccurred(const QString &message);
+    void requestPrepared(const QString &payloadJson);
+    void providerPayloadPrepared(const QString &url, const QString &payloadJson);
     void historyChanged();
     void sessionsChanged();
     void activeSessionChanged(const QString &sessionId);
@@ -84,5 +87,4 @@ private:
 
 } // namespace chat
 } // namespace qtllm
-
 

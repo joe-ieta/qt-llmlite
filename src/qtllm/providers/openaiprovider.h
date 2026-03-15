@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include "illmprovider.h"
 
 namespace qtllm {
 
-class OpenAICompatibleProvider : public ILLMProvider
+class OpenAIProvider : public ILLMProvider
 {
 public:
     QString name() const override;
