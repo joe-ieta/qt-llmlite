@@ -24,6 +24,19 @@ public:
 
     virtual QList<QString> parseStreamTokens(const QByteArray &chunk) const = 0;
 
+    virtual QList<LlmStreamDelta> parseStreamDeltas(const QByteArray &chunk) const
+    {
+        QList<LlmStreamDelta> deltas;
+        const QList<QString> tokens = parseStreamTokens(chunk);
+        for (const QString &token : tokens) {
+            LlmStreamDelta delta;
+            delta.channel = QStringLiteral("content");
+            delta.text = token;
+            deltas.append(delta);
+        }
+        return deltas;
+    }
+
     virtual bool supportsStructuredToolCalls() const
     {
         return false;

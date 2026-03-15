@@ -1,32 +1,30 @@
 # ROADMAP.md
 
 ## Phase 1: foundation
-
 - qmake workspace setup
 - core type definitions
 - `QtLLMClient`
 - `ILLMProvider`
 - `OpenAICompatibleProvider`
-- simple HTTP executor
-- example app
+- HTTP executor
+- basic example app
 
-## Phase 2: provider expansion
+## Phase 2: conversation and tool runtime
+- conversation persistence
+- tool registry and built-in tools
+- tool selection and execution loop
+- provider protocol adapters
+- multi-client example UI
 
-- `OllamaProvider`
-- `VllmProvider`
-- provider factory
-- persistent config support
+## Phase 3: MCP and observability
+- MCP server registry and persistence
+- MCP client bridge and tool sync
+- MCP server manager demo and chat window
+- unified runtime logging with file rotation and UI sink
+- OpenAI `/responses` provider split
 
-## Phase 3: developer usability
-
-- richer message structures
-- system/user/assistant role modeling
-- better stream parsing
-- more polished example UI
-
-## Phase 4: advanced AI integration
-
-- embeddings
-- tool-calling oriented abstractions
-- retrieval-oriented utilities
-- Qt Creator integration exploration
+## Phase 4: hardening
+- broader automated coverage for MCP and provider edge cases
+- structured tool trace persistence
+- richer log viewers and export helpers
+- stronger policy and permission controls

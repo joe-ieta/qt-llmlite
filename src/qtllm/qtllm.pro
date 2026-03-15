@@ -22,13 +22,16 @@ INCLUDEPATH += \
     $$PWD/profile \
     $$PWD/tools \
     $$PWD/tools/runtime \
-    $$PWD/tools/protocol
+    $$PWD/tools/protocol \
+    $$PWD/tools/mcp \
+    $$PWD/logging
 
 HEADERS += \
     core/llmconfig.h \
     core/llmtypes.h \
     core/qtllmclient.h \
     providers/illmprovider.h \
+    providers/openaiprovider.h \
     providers/openaicompatibleprovider.h \
     providers/ollamaprovider.h \
     providers/providerfactory.h \
@@ -58,10 +61,23 @@ HEADERS += \
     tools/runtime/toolcallorchestrator.h \
     tools/protocol/itoolcallprotocoladapter.h \
     tools/protocol/providerprotocoladapters.h \
-    tools/protocol/toolcallprotocolrouter.h
+    tools/protocol/toolcallprotocolrouter.h \
+    tools/mcp/mcp_types.h \
+    tools/mcp/mcpserverregistry.h \
+    tools/mcp/mcpserverrepository.h \
+    tools/mcp/imcpclient.h \
+    tools/mcp/defaultmcpclient.h \
+    tools/mcp/mcptoolsyncservice.h \
+    tools/mcp/mcpservermanager.h \
+    logging/logtypes.h \
+    logging/ilogsink.h \
+    logging/filelogsink.h \
+    logging/signallogsink.h \
+    logging/qtllmlogger.h
 
 SOURCES += \
     core/qtllmclient.cpp \
+    providers/openaiprovider.cpp \
     providers/openaicompatibleprovider.cpp \
     providers/ollamaprovider.cpp \
     providers/providerfactory.cpp \
@@ -83,4 +99,13 @@ SOURCES += \
     tools/runtime/clienttoolpolicyrepository.cpp \
     tools/runtime/toolcallorchestrator.cpp \
     tools/protocol/providerprotocoladapters.cpp \
-    tools/protocol/toolcallprotocolrouter.cpp
+    tools/protocol/toolcallprotocolrouter.cpp \
+    tools/mcp/mcpserverregistry.cpp \
+    tools/mcp/mcpserverrepository.cpp \
+    tools/mcp/defaultmcpclient.cpp \
+    tools/mcp/mcptoolsyncservice.cpp \
+    tools/mcp/mcpservermanager.cpp \
+    logging/logtypes.cpp \
+    logging/filelogsink.cpp \
+    logging/signallogsink.cpp \
+    logging/qtllmlogger.cpp

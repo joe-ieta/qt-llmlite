@@ -1,5 +1,6 @@
-#include "qtllmclient.h"
+﻿#include "qtllmclient.h"
 
+#include "../logging/qtllmlogger.h"
 #include "../network/httpexecutor.h"
 #include "../providers/illmprovider.h"
 #include "../providers/providerfactory.h"
@@ -8,8 +9,36 @@
 #include "../tools/runtime/toolruntime_types.h"
 
 #include <QDateTime>
+#include <QJsonObject>
+#include <QUrlQuery>
+#include <QUuid>
 
 namespace qtllm {
+
+namespace {
+
+logging::LogContext logContext(const QString &clientId, const QString &sessionId, const QString &requestId)
+{
+    logging::LogContext context;
+    context.clientId = clientId;
+    context.sessionId = sessionId;
+    context.requestId = requestId;
+    return context;
+}
+
+QString redactedUrl(const QNetworkRequest &request)
+{
+    QUrl url = request.url();
+    QUrlQuery query(url);
+    if (query.hasQueryItem(QStringLiteral("key"))) {
+        query.removeAllQueryItems(QStringLiteral("key"));
+        query.addQueryItem(QStringLiteral("key"), QStringLiteral("***"));
+        url.setQuery(query);
+    }
+    return url.toString();
+}
+
+} // namespace
 
 QtLLMClient::QtLLMClient(QObject *parent)
     : QObject(parent)
@@ -42,7 +71,12 @@ bool QtLLMClient::setProviderByName(const QString &providerName)
 {
     std::unique_ptr<ILLMProvider> provider = ProviderFactory::create(providerName);
     if (!provider) {
-        emit errorOccurred(QStringLiteral("Unsupported provider: ") + providerName);
+        const QString message = QStringLiteral("Unsupported provider: ") + providerName;
+        logging::QtLlmLogger::instance().error(QStringLiteral("llm.provider"),
+                                               QStringLiteral("Provider resolution failed"),
+                                               logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId),
+                                               QJsonObject{{QStringLiteral("providerName"), providerName}});
+        emit errorOccurred(message);
         return false;
     }
 
@@ -81,7 +115,10 @@ void QtLLMClient::sendRequest(const LlmRequest &request)
                 return;
             }
         } else {
-            emit errorOccurred(QStringLiteral("No provider configured"));
+            const QString message = QStringLiteral("No provider configured");
+            logging::QtLlmLogger::instance().error(QStringLiteral("llm.provider"), message,
+                                                   logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId));
+            emit errorOccurred(message);
             return;
         }
     }
@@ -91,12 +128,16 @@ void QtLLMClient::sendRequest(const LlmRequest &request)
 
 void QtLLMClient::cancelCurrentRequest()
 {
+    logging::QtLlmLogger::instance().info(QStringLiteral("llm.request"),
+                                          QStringLiteral("Current request cancellation requested"),
+                                          logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId));
     m_executor->cancel();
 }
 
 void QtLLMClient::dispatchRequest(const LlmRequest &request)
 {
     m_accumulatedText.clear();
+    m_accumulatedReasoning.clear();
     m_streamParser->clear();
 
     LlmRequest resolved = request;
@@ -104,9 +145,21 @@ void QtLLMClient::dispatchRequest(const LlmRequest &request)
         resolved.model = m_config.model;
     }
     m_activeRequest = resolved;
+    m_activeRequestId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
     const QNetworkRequest networkRequest = m_provider->buildRequest(resolved);
     const QByteArray payload = m_provider->buildPayload(resolved);
+
+    logging::QtLlmLogger::instance().info(QStringLiteral("llm.request"),
+                                          QStringLiteral("Dispatching LLM request"),
+                                          logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId),
+                                          QJsonObject{{QStringLiteral("providerName"), m_config.providerName},
+                                                      {QStringLiteral("model"), resolved.model},
+                                                      {QStringLiteral("stream"), resolved.stream},
+                                                      {QStringLiteral("messageCount"), resolved.messages.size()},
+                                                      {QStringLiteral("toolCount"), resolved.tools.size()},
+                                                      {QStringLiteral("payloadBytes"), payload.size()},
+                                                      {QStringLiteral("url"), redactedUrl(networkRequest)}});
 
     HttpRequestOptions options;
     options.timeoutMs = m_config.timeoutMs;
@@ -125,10 +178,16 @@ void QtLLMClient::wireExecutor()
 
         const QStringList lines = m_streamParser->append(chunk);
         for (const QString &line : lines) {
-            const QList<QString> tokens = m_provider->parseStreamTokens(line.toUtf8());
-            for (const QString &token : tokens) {
-                m_accumulatedText += token;
-                emit tokenReceived(token);
+            const QList<LlmStreamDelta> deltas = m_provider->parseStreamDeltas(line.toUtf8());
+            for (const LlmStreamDelta &delta : deltas) {
+                if (delta.channel == QStringLiteral("reasoning")) {
+                    m_accumulatedReasoning += delta.text;
+                    emit reasoningTokenReceived(delta.text);
+                    continue;
+                }
+
+                m_accumulatedText += delta.text;
+                emit tokenReceived(delta.text);
             }
         }
     });
@@ -141,10 +200,16 @@ void QtLLMClient::wireExecutor()
         if (m_activeRequest.stream) {
             const QString pendingLine = m_streamParser->takePendingLine();
             if (!pendingLine.isEmpty()) {
-                const QList<QString> tokens = m_provider->parseStreamTokens(pendingLine.toUtf8());
-                for (const QString &token : tokens) {
-                    m_accumulatedText += token;
-                    emit tokenReceived(token);
+                const QList<LlmStreamDelta> deltas = m_provider->parseStreamDeltas(pendingLine.toUtf8());
+                for (const LlmStreamDelta &delta : deltas) {
+                    if (delta.channel == QStringLiteral("reasoning")) {
+                        m_accumulatedReasoning += delta.text;
+                        emit reasoningTokenReceived(delta.text);
+                        continue;
+                    }
+
+                    m_accumulatedText += delta.text;
+                    emit tokenReceived(delta.text);
                 }
             }
         }
@@ -159,6 +224,11 @@ void QtLLMClient::wireExecutor()
         }
 
         if (!response.success) {
+            logging::QtLlmLogger::instance().error(QStringLiteral("llm.response"),
+                                                   QStringLiteral("LLM response parsing failed"),
+                                                   logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId),
+                                                   QJsonObject{{QStringLiteral("error"), response.errorMessage},
+                                                               {QStringLiteral("responseBytes"), data.size()}});
             emit errorOccurred(response.errorMessage);
             m_streamParser->clear();
             return;
@@ -169,12 +239,21 @@ void QtLLMClient::wireExecutor()
             finalText = response.text;
         }
 
+        logging::QtLlmLogger::instance().info(QStringLiteral("llm.response"),
+                                              QStringLiteral("LLM response received"),
+                                              logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId),
+                                              QJsonObject{{QStringLiteral("assistantTextLength"), finalText.size()},
+                                                          {QStringLiteral("reasoningLength"), m_accumulatedReasoning.size()},
+                                                          {QStringLiteral("toolCallCount"), response.assistantMessage.toolCalls.size()},
+                                                          {QStringLiteral("finishReason"), response.finishReason}});
+
         if (m_toolOrchestrator && !m_toolLoopClientId.isEmpty() && !m_toolLoopSessionId.isEmpty()) {
             tools::runtime::ToolExecutionContext context;
             context.clientId = m_toolLoopClientId;
             context.sessionId = m_toolLoopSessionId;
             context.llmConfig = m_config;
             context.historyWindow = m_activeRequest.messages;
+            context.requestId = m_activeRequestId;
             context.extra.insert(QStringLiteral("requestTimestamp"),
                                  QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
 
@@ -186,6 +265,9 @@ void QtLLMClient::wireExecutor()
                 context);
 
             if (outcome.terminatedByFailureGuard) {
+                logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                                      QStringLiteral("Tool loop stopped after repeated failures"),
+                                                      logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId));
                 emit errorOccurred(QStringLiteral("Tool loop stopped after repeated failures"));
                 emit responseReceived(response);
                 emit completed(finalText);
@@ -220,8 +302,13 @@ void QtLLMClient::wireExecutor()
 
     connect(m_executor, &HttpExecutor::errorOccurred, this, [this](const QString &message) {
         m_streamParser->clear();
+        logging::QtLlmLogger::instance().error(QStringLiteral("llm.request"),
+                                               QStringLiteral("HTTP executor reported request error"),
+                                               logContext(m_toolLoopClientId, m_toolLoopSessionId, m_activeRequestId),
+                                               QJsonObject{{QStringLiteral("error"), message}});
         emit errorOccurred(message);
     });
 }
 
 } // namespace qtllm
+

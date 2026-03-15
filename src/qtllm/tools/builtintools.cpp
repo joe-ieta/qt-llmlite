@@ -1,4 +1,4 @@
-ï»¿#include "builtintools.h"
+#include "builtintools.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -12,9 +12,10 @@ LlmToolDefinition makeCurrentTimeTool()
 {
     LlmToolDefinition tool;
     tool.toolId = QStringLiteral("current_time");
-    tool.name = QStringLiteral("current_time");
+    tool.invocationName = QStringLiteral("current_time");
+    tool.name = QStringLiteral("Current Time");
     tool.description = QStringLiteral("Get current date/time in local or specified timezone");
-    tool.capabilityTags = QStringList({QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now"), QStringLiteral("æ—¶é—´")});
+    tool.capabilityTags = QStringList({QStringLiteral("time"), QStringLiteral("date"), QStringLiteral("now"), QStringLiteral("today"), QStringLiteral("Ê±¼ä")});
     tool.category = QStringLiteral("builtin");
     tool.systemBuiltIn = true;
     tool.removable = false;
@@ -36,9 +37,10 @@ LlmToolDefinition makeCurrentWeatherTool()
 {
     LlmToolDefinition tool;
     tool.toolId = QStringLiteral("current_weather");
-    tool.name = QStringLiteral("current_weather");
+    tool.invocationName = QStringLiteral("current_weather");
+    tool.name = QStringLiteral("Current Weather");
     tool.description = QStringLiteral("Get current weather by latitude and longitude");
-    tool.capabilityTags = QStringList({QStringLiteral("weather"), QStringLiteral("temperature"), QStringLiteral("å¤©æ°”"), QStringLiteral("æ°”æ¸©")});
+    tool.capabilityTags = QStringList({QStringLiteral("weather"), QStringLiteral("temperature"), QStringLiteral("ÌìÆø"), QStringLiteral("ÆøÎÂ")});
     tool.category = QStringLiteral("builtin");
     tool.systemBuiltIn = true;
     tool.removable = false;
@@ -112,6 +114,9 @@ QList<LlmToolDefinition> mergeWithBuiltInTools(const QList<LlmToolDefinition> &t
         normalized.removable = false;
         normalized.enabled = true;
 
+        if (normalized.invocationName.isEmpty()) {
+            normalized.invocationName = builtIn.invocationName;
+        }
         if (normalized.name.isEmpty()) {
             normalized.name = builtIn.name;
         }
@@ -129,6 +134,7 @@ QList<LlmToolDefinition> mergeWithBuiltInTools(const QList<LlmToolDefinition> &t
             || (normalized.systemBuiltIn != it->systemBuiltIn)
             || (normalized.removable != it->removable)
             || (normalized.enabled != it->enabled)
+            || (normalized.invocationName != it->invocationName)
             || (normalized.name != it->name)
             || (normalized.description != it->description)
             || (normalized.inputSchema != it->inputSchema)

@@ -36,9 +36,11 @@ public:
 
 signals:
     void tokenReceived(const QString &token);
+    void reasoningTokenReceived(const QString &token);
     void completed(const QString &text);
     void responseReceived(const LlmResponse &response);
     void errorOccurred(const QString &message);
+    void providerPayloadPrepared(const QString &url, const QString &payloadJson);
 
 private:
     void wireExecutor();
@@ -50,6 +52,8 @@ private:
     HttpExecutor *m_executor;
     std::unique_ptr<StreamChunkParser> m_streamParser;
     QString m_accumulatedText;
+    QString m_accumulatedReasoning;
+    QString m_activeRequestId;
     LlmRequest m_activeRequest;
     std::shared_ptr<tools::runtime::ToolCallOrchestrator> m_toolOrchestrator;
     QString m_toolLoopClientId;
@@ -57,3 +61,5 @@ private:
 };
 
 } // namespace qtllm
+
+

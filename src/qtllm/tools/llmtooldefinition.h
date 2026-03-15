@@ -10,6 +10,7 @@ namespace qtllm::tools {
 struct LlmToolDefinition
 {
     QString toolId;
+    QString invocationName;
     QString name;
     QString description;
     QJsonObject inputSchema;
@@ -23,6 +24,7 @@ struct LlmToolDefinition
     {
         QJsonObject root;
         root.insert(QStringLiteral("toolId"), toolId);
+        root.insert(QStringLiteral("invocationName"), invocationName);
         root.insert(QStringLiteral("name"), name);
         root.insert(QStringLiteral("description"), description);
         root.insert(QStringLiteral("inputSchema"), inputSchema);
@@ -44,6 +46,7 @@ struct LlmToolDefinition
     {
         LlmToolDefinition tool;
         tool.toolId = root.value(QStringLiteral("toolId")).toString();
+        tool.invocationName = root.value(QStringLiteral("invocationName")).toString();
         tool.name = root.value(QStringLiteral("name")).toString();
         tool.description = root.value(QStringLiteral("description")).toString();
         tool.inputSchema = root.value(QStringLiteral("inputSchema")).toObject();
@@ -51,6 +54,13 @@ struct LlmToolDefinition
         tool.systemBuiltIn = root.value(QStringLiteral("systemBuiltIn")).toBool(false);
         tool.removable = root.value(QStringLiteral("removable")).toBool(!tool.systemBuiltIn);
         tool.enabled = root.value(QStringLiteral("enabled")).toBool(true);
+
+        if (tool.invocationName.trimmed().isEmpty()) {
+            tool.invocationName = tool.name.trimmed().isEmpty() ? tool.toolId : tool.name;
+        }
+        if (tool.name.trimmed().isEmpty()) {
+            tool.name = tool.invocationName.trimmed().isEmpty() ? tool.toolId : tool.invocationName;
+        }
 
         const QJsonArray tags = root.value(QStringLiteral("capabilityTags")).toArray();
         for (const QJsonValue &value : tags) {

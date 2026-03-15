@@ -87,7 +87,14 @@ QJsonObject toOpenAiMessage(const LlmMessage &message)
 {
     QJsonObject obj;
     obj.insert(QStringLiteral("role"), message.role);
-    obj.insert(QStringLiteral("content"), message.content);
+
+    const QString role = message.role.trimmed().toLower();
+    const bool assistantToolCallOnly = role == QStringLiteral("assistant")
+        && !message.toolCalls.isEmpty()
+        && message.content.isEmpty();
+    if (!assistantToolCallOnly) {
+        obj.insert(QStringLiteral("content"), message.content);
+    }
 
     if (!message.name.trimmed().isEmpty()) {
         obj.insert(QStringLiteral("name"), message.name);
@@ -644,17 +651,104 @@ QByteArray OpenAICompatibleProvider::buildPayload(const LlmRequest &request) con
 
 LlmResponse OpenAICompatibleProvider::parseResponse(const QByteArray &data) const
 {
-    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    const QByteArray trimmedData = data.trimmed();
+    const QString vendor = inferVendor(m_config.modelVendor, m_config.model);
+    const VendorSchema schema = vendorSchema(vendor);
+
+    if (trimmedData.startsWith("data:")) {
+        QJsonObject lastRoot;
+        QStringList contentParts;
+        QStringList reasoningParts;
+        QString finishReason;
+
+        const QList<QByteArray> lines = trimmedData.split('\n');
+        for (const QByteArray &line : lines) {
+            const QByteArray trimmed = line.trimmed();
+            if (!trimmed.startsWith("data:")) {
+                continue;
+            }
+
+            const QByteArray payload = trimmed.mid(5).trimmed();
+            if (payload.isEmpty() || payload == "[DONE]") {
+                continue;
+            }
+
+            const QJsonDocument doc = QJsonDocument::fromJson(payload);
+            if (!doc.isObject()) {
+                continue;
+            }
+
+            lastRoot = doc.object();
+            if (schema != VendorSchema::OpenAI) {
+                continue;
+            }
+
+            const QJsonArray choices = lastRoot.value(QStringLiteral("choices")).toArray();
+            if (choices.isEmpty()) {
+                continue;
+            }
+
+            const QJsonObject choice = choices.first().toObject();
+            finishReason = choice.value(QStringLiteral("finish_reason")).toString(finishReason);
+            const QJsonObject delta = choice.value(QStringLiteral("delta")).toObject();
+
+            const QString content = delta.value(QStringLiteral("content")).toString();
+            if (!content.isEmpty()) {
+                contentParts.append(content);
+            }
+
+            const QString reasoning = delta.value(QStringLiteral("reasoning")).toString();
+            if (!reasoning.isEmpty()) {
+                reasoningParts.append(reasoning);
+            }
+        }
+
+        if (lastRoot.isEmpty()) {
+            LlmResponse response;
+            response.errorMessage = QStringLiteral("Invalid SSE response: no JSON events found");
+            return response;
+        }
+
+        if (schema == VendorSchema::Anthropic) {
+            return parseAnthropicResponse(lastRoot);
+        }
+
+        if (schema == VendorSchema::Google) {
+            return parseGoogleResponse(lastRoot);
+        }
+
+        LlmResponse response;
+        response.finishReason = finishReason;
+        response.assistantMessage.role = QStringLiteral("assistant");
+        response.assistantMessage.content = contentParts.join(QString());
+        if (response.assistantMessage.content.isEmpty()) {
+            response.assistantMessage.content = reasoningParts.join(QString());
+        }
+        response.text = response.assistantMessage.content;
+        response.success = !response.text.isEmpty();
+
+        if (!response.success) {
+            response = parseOpenAiResponse(lastRoot);
+            if (!response.success) {
+                response.errorMessage = QStringLiteral("Empty assistant message in SSE response");
+            }
+        }
+
+        return response;
+    }
+
+    QJsonParseError error;
+    const QJsonDocument doc = QJsonDocument::fromJson(trimmedData, &error);
     if (!doc.isObject()) {
         LlmResponse response;
-        response.errorMessage = QStringLiteral("Invalid JSON response");
+        response.errorMessage = QStringLiteral("Invalid JSON response: ")
+            + error.errorString()
+            + QStringLiteral("\n")
+            + QString::fromUtf8(trimmedData.left(2048));
         return response;
     }
 
     const QJsonObject root = doc.object();
-    const QString vendor = inferVendor(m_config.modelVendor, m_config.model);
-    const VendorSchema schema = vendorSchema(vendor);
-
     if (schema == VendorSchema::Anthropic || root.contains(QStringLiteral("stop_reason"))) {
         return parseAnthropicResponse(root);
     }
@@ -666,6 +760,88 @@ LlmResponse OpenAICompatibleProvider::parseResponse(const QByteArray &data) cons
     return parseOpenAiResponse(root);
 }
 
+QList<LlmStreamDelta> OpenAICompatibleProvider::parseStreamDeltas(const QByteArray &chunk) const
+{
+    QList<LlmStreamDelta> deltas;
+
+    const QString vendor = inferVendor(m_config.modelVendor, m_config.model);
+    const VendorSchema schema = vendorSchema(vendor);
+
+    const QList<QByteArray> lines = chunk.split('\n');
+    for (const QByteArray &line : lines) {
+        const QByteArray trimmed = line.trimmed();
+        if (!trimmed.startsWith("data:")) {
+            continue;
+        }
+
+        const QByteArray payload = trimmed.mid(5).trimmed();
+        if (payload == "[DONE]" || payload.isEmpty()) {
+            continue;
+        }
+
+        const QJsonDocument doc = QJsonDocument::fromJson(payload);
+        if (!doc.isObject()) {
+            continue;
+        }
+
+        const QJsonObject root = doc.object();
+
+        if (schema == VendorSchema::Anthropic || root.contains(QStringLiteral("delta"))) {
+            const QJsonObject delta = root.value(QStringLiteral("delta")).toObject();
+            const QString text = delta.value(QStringLiteral("text")).toString();
+            if (!text.isEmpty()) {
+                LlmStreamDelta streamDelta;
+                streamDelta.channel = QStringLiteral("content");
+                streamDelta.text = text;
+                deltas.append(streamDelta);
+            }
+            continue;
+        }
+
+        if (schema == VendorSchema::Google || root.contains(QStringLiteral("candidates"))) {
+            const QJsonArray candidates = root.value(QStringLiteral("candidates")).toArray();
+            if (!candidates.isEmpty()) {
+                const QJsonArray parts = candidates.first().toObject()
+                                             .value(QStringLiteral("content")).toObject()
+                                             .value(QStringLiteral("parts")).toArray();
+                for (const QJsonValue &partValue : parts) {
+                    const QString text = partValue.toObject().value(QStringLiteral("text")).toString();
+                    if (!text.isEmpty()) {
+                        LlmStreamDelta streamDelta;
+                        streamDelta.channel = QStringLiteral("content");
+                        streamDelta.text = text;
+                        deltas.append(streamDelta);
+                    }
+                }
+            }
+            continue;
+        }
+
+        const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
+        if (choices.isEmpty()) {
+            continue;
+        }
+
+        const QJsonObject delta = choices.first().toObject().value(QStringLiteral("delta")).toObject();
+        const QString content = delta.value(QStringLiteral("content")).toString();
+        if (!content.isEmpty()) {
+            LlmStreamDelta streamDelta;
+            streamDelta.channel = QStringLiteral("content");
+            streamDelta.text = content;
+            deltas.append(streamDelta);
+        }
+
+        const QString reasoning = delta.value(QStringLiteral("reasoning")).toString();
+        if (!reasoning.isEmpty()) {
+            LlmStreamDelta streamDelta;
+            streamDelta.channel = QStringLiteral("reasoning");
+            streamDelta.text = reasoning;
+            deltas.append(streamDelta);
+        }
+    }
+
+    return deltas;
+}
 QList<QString> OpenAICompatibleProvider::parseStreamTokens(const QByteArray &chunk) const
 {
     QList<QString> tokens;
@@ -738,3 +914,6 @@ bool OpenAICompatibleProvider::supportsStructuredToolCalls() const
 }
 
 } // namespace qtllm
+
+
+

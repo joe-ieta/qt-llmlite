@@ -2,7 +2,7 @@
 
 ## Overview
 
-qt-llm is structured as a small Qt library plus example applications.
+qt-llm is organized as a focused Qt library plus reference applications.
 
 The dependency direction remains:
 
@@ -15,28 +15,23 @@ Application/UI
   -> remote or local LLM service
 ```
 
-`QtLLMClient` is still the base client API and now includes an internal tool-loop state path when orchestrator/context are configured.
+`QtLLMClient` is the base client API and can run an internal tool-call loop when tool runtime context is configured.
 
 ## Architectural principles
 
 ### 1. Provider abstraction first
-
-The client should not directly carry vendor JSON protocol logic; provider implementations map protocol details.
+Provider implementations own vendor request and response mapping. Application code should not embed protocol JSON details.
 
 ### 2. Async-first request pipeline
-
-Network calls remain non-blocking and signal-driven.
+Network execution remains signal-driven and non-blocking.
 
 ### 3. Streaming-ready design
-
-Interfaces anticipate streamed output and fragmented chunks.
+Provider interfaces expose both token-level and richer stream delta parsing.
 
 ### 4. Additive evolution
-
-Factory persistence, tools, policies, and protocol routing are additive layers around base chat capabilities.
+Conversation persistence, tool runtime, MCP integration, and logging are additive layers on top of the base chat client.
 
 ### 5. Small modules with strict boundaries
-
 Each module keeps narrow responsibility and avoids circular coupling.
 
 ## Source layout (current)
@@ -59,10 +54,17 @@ src/
       conversationrepository.h/.cpp
     providers/
       illmprovider.h
+      openaiprovider.h/.cpp
       openaicompatibleprovider.h/.cpp
       ollamaprovider.h/.cpp
       vllmprovider.h/.cpp
       providerfactory.h/.cpp
+    logging/
+      logtypes.h/.cpp
+      ilogsink.h
+      filelogsink.h/.cpp
+      signallogsink.h/.cpp
+      qtllmlogger.h/.cpp
     network/
       httpexecutor.h/.cpp
     streaming/
@@ -74,6 +76,14 @@ src/
       llmtooladapter.h/.cpp
       toolselectionlayer.h/.cpp
       toolenabledchatentry.h/.cpp
+      mcp/
+        mcp_types.h
+        imcpclient.h
+        defaultmcpclient.h/.cpp
+        mcpserverregistry.h/.cpp
+        mcpserverrepository.h/.cpp
+        mcpservermanager.h/.cpp
+        mcptoolsyncservice.h/.cpp
       protocol/
         itoolcallprotocoladapter.h
         providerprotocoladapters.h/.cpp
@@ -94,143 +104,150 @@ src/
     multi_client_chat/
       main.cpp
       multiclientwindow.h/.cpp
+    mcp_server_manager_demo/
+      main.cpp
+      mcpservermanagerwindow.h/.cpp
+      mcpchatwindow.h/.cpp
 ```
 
 ## Runtime flows
 
-### A. Base text/tool-capable flow
-
+### A. Base chat flow
 1. UI calls `QtLLMClient::sendPrompt(...)` or `sendRequest(...)`
-2. Client resolves provider and dispatches request through `HttpExecutor`
-3. Provider parses response or stream chunks
-4. If tool orchestrator/context are configured:
-   - parse tool calls (structured first, text fallback)
-   - execute via runtime layer
-   - build follow-up prompt/message
-   - continue until completion or failure guard
-5. Client emits `tokenReceived`, `responseReceived`, `completed`, `errorOccurred`
+2. Client resolves provider and dispatches through `HttpExecutor`
+3. Provider parses full response or stream deltas
+4. Client emits `tokenReceived`, `responseReceived`, `completed`, or `errorOccurred`
 
-### B. Multi-client/session flow
+### B. Conversation flow
+1. UI acquires `ConversationClient` by `clientId`
+2. Factory loads or saves snapshot data through `ConversationRepository`
+3. `ConversationClient` manages one active session and multiple history sessions
+4. Before send, `ConversationClient` binds `clientId` and `sessionId` into inner runtime context
 
-1. UI acquires client from `ConversationClientFactory` by `clientId`
-2. Factory loads/saves snapshot through `ConversationRepository`
-3. `ConversationClient` keeps one active session and multiple history sessions
-4. UI can create/switch sessions by `sessionId`
-5. Before send, `ConversationClient` binds tool-loop context (`clientId`, `sessionId`) to inner `QtLLMClient`
-
-### C. Tool-enabled entry flow
-
+### C. Tool-enabled flow
 1. App optionally uses `ToolEnabledChatEntry`
-2. Entry reads profile/history/tool registry and policy repository
-3. Selection layer picks candidate tools
-4. Adapter maps canonical tools to provider/model schema hints
-5. Entry injects orchestrator/policy wiring and sends message through `ConversationClient`
-6. Internal `QtLLMClient` loop executes tool-call chain
+2. Entry reads profile, history, tool registry, and client policy
+3. `ToolSelectionLayer` picks candidate tools for the current turn
+4. `LlmToolAdapter` maps canonical tools into provider-facing tool schema
+5. Entry sends the request through `ConversationClient`
+6. `QtLLMClient` runs the internal tool loop through `ToolCallOrchestrator`
+
+### D. MCP-backed external tool flow
+1. Host app registers MCP servers through `McpServerManager`
+2. Server definitions persist under workspace `.qtllm/mcp/servers.json`
+3. `McpToolSyncService` lists remote tools and registers them into `LlmToolRegistry`
+4. Registered MCP tools participate in normal selection and provider tool-schema generation
+5. `ToolExecutionLayer` resolves tool source and routes MCP tools through `IMcpClient`
+
+### E. Logging and observability flow
+1. Runtime code writes structured `LogEvent` records through `QtLlmLogger`
+2. `FileLogSink` stores per-client rotated JSONL logs under `.qtllm/logs/<clientId>/`
+3. `SignalLogSink` pushes the same events into Qt widgets for live inspection
 
 ## Design boundaries
 
 ### `QtLLMClient`
-
 Should manage:
-
-- active provider and executor
-- request lifecycle
-- stream token emission
-- optional internal tool-loop state flow
+- active provider and HTTP executor
+- request lifecycle and streaming output
+- provider payload diagnostics
+- optional internal tool-loop state
 
 Should not manage:
-
-- tool registration/catalog persistence concerns
 - UI rendering
-- high-level product policies
+- tool catalog persistence policy
+- MCP server registry CRUD
 
 ### `ConversationClient` / `ConversationClientFactory`
-
 Should manage:
-
 - client identity lifecycle
-- per-client active session and session history
+- active session and history sessions
 - snapshot persistence triggers
-- profile/config binding for request construction
+- provider/config binding for request construction
 
 Should not manage:
-
-- vendor protocol JSON details
+- vendor protocol mapping
 - low-level HTTP mechanics
 
 ### `ILLMProvider`
-
 Should manage:
-
-- URLs, headers, payload mapping
-- response parsing
-- stream token parsing
-- vendor schema adaptation
+- request URLs, headers, and payload construction
+- response parsing and stream parsing
+- vendor-specific structured tool-call semantics
 
 Should not manage:
-
 - UI behavior
-- top-level scheduling/policy
-
-### `HttpExecutor`
-
-Should manage:
-
-- `QNetworkAccessManager`
-- HTTP execution lifecycle
-- timeout/retry/cancel
-
-Should not manage:
-
-- provider/tool parsing semantics
+- business policies
 
 ### Tools runtime
-
 Should manage:
-
 - canonical tool definitions and registry
-- built-in tool bootstrap and immutability
-- protocol adapter routing (vendor-first)
-- execution layer abstraction and policy checks
-- loop orchestration with failure guard
-- tool catalog and client policy persistence
+- built-in tool bootstrap
+- provider protocol routing
+- execution abstraction, loop orchestration, and failure guard
+- MCP execution routing
 
 Should not manage:
+- widget composition
+- provider transport details outside tool execution
 
-- replacing base chat APIs
-- widget-level logic
+### MCP module
+Should manage:
+- MCP server definitions and validation
+- persistent server registry
+- server capability listing and tool import
+- MCP tool execution bridge
+
+Should not manage:
+- generic tool-selection policy
+- direct UI rendering
+
+### Logging module
+Should manage:
+- structured event model
+- sink registration and filtering by level
+- per-client rotated file logging
+- Qt signal delivery for UI inspection
+
+Should not manage:
+- business decisions based on log content
 
 ## Canonical tool model
 
-`LlmToolDefinition` includes:
+`LlmToolDefinition` now separates three identifiers:
+- `toolId`: internal unique identifier used by registry, policy, persistence, and execution
+- `invocationName`: provider-visible function name sent to the model
+- `name`: human-readable display name for UI
 
-- `toolId`, `name`, `description`
+Each tool also contains:
+- `description`
 - `inputSchema`
 - `capabilityTags`
-- metadata (`category`, built-in/removable/enabled flags)
-
-Provider adapters map canonical definitions to vendor-specific descriptors.
+- metadata such as `category`, built-in/removable/enabled flags
 
 ## Persistence model
 
 ### Conversation snapshot
-
 Persisted by `clientId`, includes:
-
 - profile
 - provider config (`providerName`, `baseUrl`, `apiKey`, `model`, `modelVendor`, `stream`)
 - active session id
 - session list and message history
 
-### Tools data
-
+### Tool and MCP data
 - tool catalog persisted by `ToolCatalogRepository`
 - client tool policy persisted by `ClientToolPolicyRepository`
-- built-ins are always merged/enforced at startup
+- MCP servers persisted by `McpServerRepository`
+- built-ins are always merged and enforced at startup
 
-## Known gaps and next hardening
+### Logs
+- workspace-local `.qtllm/logs/<clientId>/YYYYMMDD-XXXX.jsonl`
+- UTF-8 encoded JSON Lines
+- rotated by size, pruned by per-client file-count limit
 
-- strict provider-native protocol coverage for more vendors
+## Known hardening areas
+
+- broader provider-native protocol coverage
 - richer structured tool trace persistence in session history
-- broader runtime tests for loop guard/retry/error branches
-- stronger observability and audit fields for production operations
+- more automated coverage for tool-loop retry and guard branches
+- structured log filtering/export in more example apps

@@ -11,6 +11,8 @@ namespace qtllm::tools {
 class LlmToolRegistry
 {
 public:
+    LlmToolRegistry();
+
     bool registerTool(const LlmToolDefinition &tool);
     bool unregisterTool(const QString &toolId);
     void clear();
@@ -20,6 +22,7 @@ public:
     QList<LlmToolDefinition> enabledTools() const;
     bool contains(const QString &toolId) const;
     bool isRemovable(const QString &toolId) const;
+    QString resolveToolId(const QString &toolIdOrName) const;
 
 private:
     QHash<QString, LlmToolDefinition> m_tools;

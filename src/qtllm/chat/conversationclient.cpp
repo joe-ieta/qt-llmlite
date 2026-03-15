@@ -1,10 +1,12 @@
-#include "conversationclient.h"
+﻿#include "conversationclient.h"
 
 #include "../core/qtllmclient.h"
 #include "../providers/illmprovider.h"
 #include "../tools/runtime/toolcallorchestrator.h"
 
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QUuid>
 #include <QtGlobal>
 
@@ -15,6 +17,53 @@ namespace {
 QString defaultSessionTitle(int index)
 {
     return QStringLiteral("Session %1").arg(index);
+}
+
+QJsonObject toJson(const LlmToolCall &toolCall)
+{
+    QJsonObject obj;
+    obj.insert(QStringLiteral("id"), toolCall.id);
+    obj.insert(QStringLiteral("name"), toolCall.name);
+    obj.insert(QStringLiteral("arguments"), toolCall.arguments);
+    obj.insert(QStringLiteral("type"), toolCall.type);
+    return obj;
+}
+
+QJsonObject toJson(const LlmMessage &message)
+{
+    QJsonObject obj;
+    obj.insert(QStringLiteral("role"), message.role);
+    obj.insert(QStringLiteral("content"), message.content);
+    if (!message.name.isEmpty()) {
+        obj.insert(QStringLiteral("name"), message.name);
+    }
+    if (!message.toolCallId.isEmpty()) {
+        obj.insert(QStringLiteral("tool_call_id"), message.toolCallId);
+    }
+    if (!message.toolCalls.isEmpty()) {
+        QJsonArray toolCalls;
+        for (const LlmToolCall &toolCall : message.toolCalls) {
+            toolCalls.append(toJson(toolCall));
+        }
+        obj.insert(QStringLiteral("tool_calls"), toolCalls);
+    }
+    return obj;
+}
+
+QString requestToJsonText(const LlmRequest &request)
+{
+    QJsonObject root;
+    root.insert(QStringLiteral("model"), request.model);
+    root.insert(QStringLiteral("stream"), request.stream);
+    root.insert(QStringLiteral("tools"), request.tools);
+
+    QJsonArray messages;
+    for (const LlmMessage &message : request.messages) {
+        messages.append(toJson(message));
+    }
+    root.insert(QStringLiteral("messages"), messages);
+
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
 } // namespace
@@ -199,6 +248,11 @@ void ConversationClient::clearHistory()
 
 void ConversationClient::sendUserMessage(const QString &content)
 {
+    sendUserMessageWithTools(content, QJsonArray());
+}
+
+void ConversationClient::sendUserMessageWithTools(const QString &content, const QJsonArray &tools)
+{
     const QString trimmed = content.trimmed();
     if (trimmed.isEmpty()) {
         return;
@@ -207,7 +261,9 @@ void ConversationClient::sendUserMessage(const QString &content)
     appendMessage(QStringLiteral("user"), trimmed);
     m_pendingAssistantText.clear();
     m_llmClient->setToolLoopContext(m_uid, m_activeSessionId);
-    m_llmClient->sendRequest(buildRequestForNextTurn());
+    const LlmRequest request = buildRequestForNextTurn(tools);
+    emit requestPrepared(requestToJsonText(request));
+    m_llmClient->sendRequest(request);
 }
 
 ConversationSnapshot ConversationClient::snapshot() const
@@ -235,7 +291,7 @@ void ConversationClient::restoreFromSnapshot(const ConversationSnapshot &snapsho
     emit historyChanged();
 }
 
-LlmRequest ConversationClient::buildRequestForNextTurn() const
+LlmRequest ConversationClient::buildRequestForNextTurn(const QJsonArray &tools) const
 {
     LlmRequest request;
     request.model = m_config.model;
@@ -261,6 +317,8 @@ LlmRequest ConversationClient::buildRequestForNextTurn() const
         thinking.content = QStringLiteral("Thinking style: ") + m_profile.thinkingStyle.trimmed();
         request.messages.append(thinking);
     }
+
+    request.tools = tools;
 
     const QVector<LlmMessage> messages = history();
     const int maxMessages = qMax(1, m_profile.memoryPolicy.maxHistoryMessages);
@@ -336,3 +394,6 @@ void ConversationClient::ensureAtLeastOneSession()
 }
 
 } // namespace qtllm::chat
+
+
+

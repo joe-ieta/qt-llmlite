@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include "conversationsnapshot.h"
 
+#include <QJsonArray>
 #include <QObject>
 #include <QVector>
 #include <memory>
@@ -47,15 +48,19 @@ public:
     void clearHistory();
 
     void sendUserMessage(const QString &content);
+    void sendUserMessageWithTools(const QString &content, const QJsonArray &tools);
 
     ConversationSnapshot snapshot() const;
     void restoreFromSnapshot(const ConversationSnapshot &snapshot);
 
 signals:
     void tokenReceived(const QString &token);
+    void reasoningTokenReceived(const QString &token);
     void completed(const QString &text);
     void responseReceived(const LlmResponse &response);
     void errorOccurred(const QString &message);
+    void requestPrepared(const QString &payloadJson);
+    void providerPayloadPrepared(const QString &url, const QString &payloadJson);
     void historyChanged();
     void sessionsChanged();
     void activeSessionChanged(const QString &sessionId);
@@ -63,7 +68,7 @@ signals:
     void profileChanged();
 
 private:
-    LlmRequest buildRequestForNextTurn() const;
+    LlmRequest buildRequestForNextTurn(const QJsonArray &tools = QJsonArray()) const;
     void appendMessage(const QString &role, const QString &content);
     int findSessionIndex(const QString &sessionId) const;
     ConversationSessionSnapshot *activeSession();
@@ -82,3 +87,4 @@ private:
 
 } // namespace chat
 } // namespace qtllm
+

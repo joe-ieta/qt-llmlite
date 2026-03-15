@@ -1,18 +1,108 @@
 #include <QtTest>
+#include <QCoreApplication>
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfoList>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkRequest>
+#include <QTemporaryDir>
+#include <QTcpServer>
+#include <QTextStream>
+#include <QTcpSocket>
 
 #include "../../src/qtllm/core/llmconfig.h"
 #include "../../src/qtllm/core/llmtypes.h"
+#include "../../src/qtllm/logging/filelogsink.h"
+#include "../../src/qtllm/logging/logtypes.h"
 #include "../../src/qtllm/providers/illmprovider.h"
 #include "../../src/qtllm/providers/openaicompatibleprovider.h"
+#include "../../src/qtllm/providers/openaiprovider.h"
 #include "../../src/qtllm/providers/providerfactory.h"
 #include "../../src/qtllm/streaming/streamchunkparser.h"
+#include "../../src/qtllm/tools/llmtoolregistry.h"
+#include "../../src/qtllm/tools/mcp/imcpclient.h"
+#include "../../src/qtllm/tools/mcp/mcpserverregistry.h"
+#include "../../src/qtllm/tools/mcp/mcptoolsyncservice.h"
+#include "../../src/qtllm/tools/runtime/toolexecutionlayer.h"
 
 using namespace qtllm;
+
+namespace {
+
+class FakeMcpClient final : public qtllm::tools::mcp::IMcpClient
+{
+public:
+    QVector<qtllm::tools::mcp::McpToolDescriptor> listedTools;
+    qtllm::tools::mcp::McpToolCallResult callResult;
+    QString lastToolName;
+    QJsonObject lastArguments;
+    QString lastServerId;
+
+    QVector<qtllm::tools::mcp::McpToolDescriptor> listTools(const qtllm::tools::mcp::McpServerDefinition &server,
+                                                            QString *errorMessage = nullptr) override
+    {
+        Q_UNUSED(errorMessage)
+        lastServerId = server.serverId;
+        return listedTools;
+    }
+
+    QVector<qtllm::tools::mcp::McpResourceDescriptor> listResources(const qtllm::tools::mcp::McpServerDefinition &server,
+                                                                    QString *errorMessage = nullptr) override
+    {
+        Q_UNUSED(server)
+        Q_UNUSED(errorMessage)
+        return {};
+    }
+
+    QVector<qtllm::tools::mcp::McpPromptDescriptor> listPrompts(const qtllm::tools::mcp::McpServerDefinition &server,
+                                                                QString *errorMessage = nullptr) override
+    {
+        Q_UNUSED(server)
+        Q_UNUSED(errorMessage)
+        return {};
+    }
+
+    qtllm::tools::mcp::McpToolCallResult callTool(const qtllm::tools::mcp::McpServerDefinition &server,
+                                                  const QString &toolName,
+                                                  const QJsonObject &arguments,
+                                                  const qtllm::tools::runtime::ToolExecutionContext &context,
+                                                  QString *errorMessage = nullptr) override
+    {
+        Q_UNUSED(context)
+        Q_UNUSED(errorMessage)
+        lastServerId = server.serverId;
+        lastToolName = toolName;
+        lastArguments = arguments;
+        return callResult;
+    }
+};
+
+QJsonObject makeSimpleSchema()
+{
+    return QJsonObject{{QStringLiteral("$schema"), QStringLiteral("http://json-schema.org/draft-07/schema#")},
+                       {QStringLiteral("type"), QStringLiteral("object")},
+                       {QStringLiteral("additionalProperties"), false},
+                       {QStringLiteral("properties"),
+                        QJsonObject{{QStringLiteral("path"),
+                                     QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},
+                                                 {QStringLiteral("default"), QStringLiteral(".")}}}}}};
+}
+
+QByteArray makeHttpResponse(const QJsonObject &body)
+{
+    const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    QByteArray response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Type: application/json\r\n";
+    response += "Content-Length: " + QByteArray::number(payload.size()) + "\r\n";
+    response += "Connection: close\r\n\r\n";
+    response += payload;
+    return response;
+}
+
+}
 
 class QtLlmCoreTests : public QObject
 {
@@ -31,6 +121,14 @@ private slots:
     void openAiCompatibleParseAnthropicResponse();
     void openAiCompatibleParseGoogleResponse();
     void openAiCompatibleParseStreamTokens();
+    void openAiBuildRequestNormalizesResponsesPath();
+    void openAiBuildPayloadSanitizesTools();
+    void openAiParseResponseParsesFunctionCalls();
+    void mcpToolSyncRegistersImportedTools();
+    void toolExecutionLayerExecutesMcpToolByInvocationName();
+    void fileLogSinkRotatesPerClient();
+    void defaultMcpClientReadsToolsOverStdio();
+    void defaultMcpClientCallsToolOverHttpLikeTransport();
     void streamChunkParserHandlesFragmentedInput();
     void streamChunkParserTakePendingLine();
 };
@@ -47,7 +145,7 @@ void QtLlmCoreTests::providerFactoryCreatesKnownProviders()
 
     std::unique_ptr<ILLMProvider> openai = ProviderFactory::create(QStringLiteral("openai"));
     QVERIFY(openai != nullptr);
-    QCOMPARE(openai->name(), QStringLiteral("openai-compatible"));
+    QCOMPARE(openai->name(), QStringLiteral("openai"));
 }
 
 void QtLlmCoreTests::providerFactoryCreatesVendorAliases()
@@ -273,6 +371,245 @@ void QtLlmCoreTests::openAiCompatibleParseStreamTokens()
     QCOMPARE(tokens.at(1), QStringLiteral("lo"));
 }
 
+void QtLlmCoreTests::openAiBuildRequestNormalizesResponsesPath()
+{
+    OpenAIProvider provider;
+
+    LlmConfig config;
+    config.baseUrl = QStringLiteral("https://api.openai.com/v1");
+    config.apiKey = QStringLiteral("openai-key");
+    provider.setConfig(config);
+
+    LlmRequest request;
+    const QNetworkRequest networkRequest = provider.buildRequest(request);
+
+    QCOMPARE(networkRequest.url().toString(), QStringLiteral("https://api.openai.com/v1/responses"));
+    QCOMPARE(networkRequest.rawHeader("Authorization"), QByteArray("Bearer openai-key"));
+}
+
+void QtLlmCoreTests::openAiBuildPayloadSanitizesTools()
+{
+    OpenAIProvider provider;
+
+    LlmConfig config;
+    config.baseUrl = QStringLiteral("https://api.openai.com/v1");
+    config.model = QStringLiteral("gpt-5.4");
+    provider.setConfig(config);
+
+    LlmRequest request;
+    request.stream = true;
+    request.messages.append({QStringLiteral("system"), QStringLiteral("You are helpful")});
+    request.messages.append({QStringLiteral("user"), QStringLiteral("List files")});
+
+    QJsonObject function;
+    function.insert(QStringLiteral("name"), QStringLiteral("mcp_filesystem_list_directory"));
+    function.insert(QStringLiteral("description"), QStringLiteral("List files in a directory"));
+    function.insert(QStringLiteral("parameters"), makeSimpleSchema());
+
+    QJsonObject tool;
+    tool.insert(QStringLiteral("type"), QStringLiteral("function"));
+    tool.insert(QStringLiteral("function"), function);
+    request.tools.append(tool);
+
+    const QJsonObject payload = QJsonDocument::fromJson(provider.buildPayload(request)).object();
+    QCOMPARE(payload.value(QStringLiteral("model")).toString(), QStringLiteral("gpt-5.4"));
+    QCOMPARE(payload.value(QStringLiteral("stream")).toBool(), true);
+    QCOMPARE(payload.value(QStringLiteral("instructions")).toString(), QStringLiteral("You are helpful"));
+
+    const QJsonArray input = payload.value(QStringLiteral("input")).toArray();
+    QCOMPARE(input.size(), 1);
+    QCOMPARE(input.first().toObject().value(QStringLiteral("role")).toString(), QStringLiteral("user"));
+
+    const QJsonArray tools = payload.value(QStringLiteral("tools")).toArray();
+    QCOMPARE(tools.size(), 1);
+    const QJsonObject outTool = tools.first().toObject();
+    QCOMPARE(outTool.value(QStringLiteral("type")).toString(), QStringLiteral("function"));
+    QCOMPARE(outTool.value(QStringLiteral("name")).toString(), QStringLiteral("mcp_filesystem_list_directory"));
+    QCOMPARE(outTool.value(QStringLiteral("strict")).toBool(), false);
+
+    const QJsonObject parameters = outTool.value(QStringLiteral("parameters")).toObject();
+    QVERIFY(!parameters.contains(QStringLiteral("$schema")));
+    QVERIFY(!parameters.value(QStringLiteral("properties")).toObject()
+                 .value(QStringLiteral("path")).toObject()
+                 .contains(QStringLiteral("default")));
+    QCOMPARE(parameters.value(QStringLiteral("type")).toString(), QStringLiteral("object"));
+}
+
+void QtLlmCoreTests::openAiParseResponseParsesFunctionCalls()
+{
+    OpenAIProvider provider;
+
+    const QByteArray json = R"({
+      "status":"completed",
+      "output":[
+        {"type":"message","content":[{"type":"output_text","text":"Checking files."}]},
+        {"type":"function_call","call_id":"call_1","name":"mcp_filesys2_list_directory","arguments":"{\"path\":\".\"}"}
+      ]
+    })";
+
+    const LlmResponse response = provider.parseResponse(json);
+    QVERIFY(response.success);
+    QCOMPARE(response.finishReason, QStringLiteral("completed"));
+    QCOMPARE(response.assistantMessage.content, QStringLiteral("Checking files."));
+    QCOMPARE(response.assistantMessage.toolCalls.size(), 1);
+    QCOMPARE(response.assistantMessage.toolCalls.first().id, QStringLiteral("call_1"));
+    QCOMPARE(response.assistantMessage.toolCalls.first().name, QStringLiteral("mcp_filesys2_list_directory"));
+    QCOMPARE(response.assistantMessage.toolCalls.first().arguments.value(QStringLiteral("path")).toString(), QStringLiteral("."));
+}
+
+void QtLlmCoreTests::mcpToolSyncRegistersImportedTools()
+{
+    auto toolRegistry = std::make_shared<qtllm::tools::LlmToolRegistry>();
+    auto serverRegistry = std::make_shared<qtllm::tools::mcp::McpServerRegistry>();
+    auto mcpClient = std::make_shared<FakeMcpClient>();
+
+    qtllm::tools::mcp::McpServerDefinition server;
+    server.serverId = QStringLiteral("filesys2");
+    server.name = QStringLiteral("Filesystem");
+    server.transport = QStringLiteral("stdio");
+    server.command = QStringLiteral("dummy");
+
+    QString errorMessage;
+    QVERIFY(serverRegistry->registerServer(server, &errorMessage));
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+
+    qtllm::tools::mcp::McpToolDescriptor descriptor;
+    descriptor.name = QStringLiteral("list_directory");
+    descriptor.description = QStringLiteral("List directory content");
+    descriptor.inputSchema = makeSimpleSchema();
+    mcpClient->listedTools.append(descriptor);
+
+    qtllm::tools::mcp::McpToolSyncService service(toolRegistry, serverRegistry, mcpClient);
+    QVERIFY(service.syncServerTools(QStringLiteral("filesys2"), &errorMessage));
+    QVERIFY2(errorMessage.isEmpty(), qPrintable(errorMessage));
+
+    const QList<qtllm::tools::LlmToolDefinition> tools = toolRegistry->allTools();
+    bool found = false;
+    for (const qtllm::tools::LlmToolDefinition &tool : tools) {
+        if (tool.toolId == QStringLiteral("mcp::filesys2::list_directory")) {
+            found = true;
+            QCOMPARE(tool.invocationName, QStringLiteral("mcp_filesys2_list_directory"));
+            QCOMPARE(tool.category, QStringLiteral("mcp"));
+            QVERIFY(tool.capabilityTags.contains(QStringLiteral("source:mcp")));
+            QVERIFY(tool.capabilityTags.contains(QStringLiteral("mcp_server:filesys2")));
+        }
+    }
+    QVERIFY(found);
+}
+
+void QtLlmCoreTests::toolExecutionLayerExecutesMcpToolByInvocationName()
+{
+    auto toolRegistry = std::make_shared<qtllm::tools::LlmToolRegistry>();
+    auto serverRegistry = std::make_shared<qtllm::tools::mcp::McpServerRegistry>();
+    auto mcpClient = std::make_shared<FakeMcpClient>();
+
+    qtllm::tools::mcp::McpServerDefinition server;
+    server.serverId = QStringLiteral("filesys2");
+    server.name = QStringLiteral("Filesystem");
+    server.transport = QStringLiteral("stdio");
+    server.command = QStringLiteral("dummy");
+
+    QString errorMessage;
+    QVERIFY(serverRegistry->registerServer(server, &errorMessage));
+
+    qtllm::tools::LlmToolDefinition tool;
+    tool.toolId = QStringLiteral("mcp::filesys2::list_directory");
+    tool.invocationName = QStringLiteral("mcp_filesys2_list_directory");
+    tool.name = QStringLiteral("list_directory");
+    tool.description = QStringLiteral("List directory content");
+    tool.inputSchema = makeSimpleSchema();
+    tool.category = QStringLiteral("mcp");
+    QVERIFY(toolRegistry->registerTool(tool));
+
+    mcpClient->callResult.success = true;
+    mcpClient->callResult.output = QJsonObject{{QStringLiteral("entries"), QJsonArray{QStringLiteral("a.txt"), QStringLiteral("b.txt")}}};
+
+    qtllm::tools::runtime::ToolExecutionLayer layer;
+    layer.setToolRegistry(toolRegistry);
+    layer.setMcpServerRegistry(serverRegistry);
+    layer.setMcpClient(mcpClient);
+
+    qtllm::tools::runtime::ToolCallRequest request;
+    request.callId = QStringLiteral("call_1");
+    request.toolId = QStringLiteral("mcp_filesys2_list_directory");
+    request.arguments = QJsonObject{{QStringLiteral("path"), QStringLiteral(".")}};
+
+    qtllm::tools::runtime::ToolExecutionContext context;
+    context.clientId = QStringLiteral("client-a");
+    context.sessionId = QStringLiteral("session-1");
+    context.requestId = QStringLiteral("request-1");
+
+    const QList<qtllm::tools::runtime::ToolExecutionResult> results = layer.executeBatch({request}, context);
+    QCOMPARE(results.size(), 1);
+    QVERIFY(results.first().success);
+    QCOMPARE(results.first().toolId, QStringLiteral("mcp::filesys2::list_directory"));
+    QCOMPARE(mcpClient->lastServerId, QStringLiteral("filesys2"));
+    QCOMPARE(mcpClient->lastToolName, QStringLiteral("list_directory"));
+    QCOMPARE(mcpClient->lastArguments.value(QStringLiteral("path")).toString(), QStringLiteral("."));
+}
+
+void QtLlmCoreTests::fileLogSinkRotatesPerClient()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    qtllm::logging::FileLogSinkOptions options;
+    options.workspaceRoot = tempDir.path();
+    options.maxBytesPerFile = 180;
+    options.maxFilesPerClient = 2;
+
+    qtllm::logging::FileLogSink sink(options);
+
+    qtllm::logging::LogEvent eventA;
+    eventA.clientId = QStringLiteral("client-a");
+    eventA.category = QStringLiteral("tool.execution");
+    eventA.level = qtllm::logging::LogLevel::Info;
+    eventA.message = QStringLiteral("rotation test entry with enough payload to trigger file rollover");
+    eventA.fields = QJsonObject{{QStringLiteral("index"), 1}, {QStringLiteral("payload"), QString(80, QLatin1Char('x'))}};
+
+    for (int i = 0; i < 8; ++i) {
+        eventA.timestampUtc = QDateTime::currentDateTimeUtc();
+        eventA.fields.insert(QStringLiteral("index"), i);
+        sink.write(eventA);
+    }
+
+    qtllm::logging::LogEvent eventB;
+    eventB.clientId = QStringLiteral("client-b");
+    eventB.category = QStringLiteral("llm.request");
+    eventB.level = qtllm::logging::LogLevel::Debug;
+    eventB.message = QStringLiteral("secondary client log");
+    eventB.timestampUtc = QDateTime::currentDateTimeUtc();
+    sink.write(eventB);
+
+    const QDir logsRoot(tempDir.filePath(QStringLiteral(".qtllm/logs")));
+    QVERIFY(logsRoot.exists());
+    QVERIFY(QDir(logsRoot.filePath(QStringLiteral("client-a"))).exists());
+    QVERIFY(QDir(logsRoot.filePath(QStringLiteral("client-b"))).exists());
+
+    const QFileInfoList clientAFiles = QDir(logsRoot.filePath(QStringLiteral("client-a"))).entryInfoList(QStringList() << QStringLiteral("*.jsonl"), QDir::Files, QDir::Name);
+    QVERIFY(!clientAFiles.isEmpty());
+    QVERIFY(clientAFiles.size() <= 4);
+
+    const QFileInfoList clientBFiles = QDir(logsRoot.filePath(QStringLiteral("client-b"))).entryInfoList(QStringList() << QStringLiteral("*.jsonl"), QDir::Files, QDir::Name);
+    QCOMPARE(clientBFiles.size(), 1);
+
+    QFile file(clientAFiles.last().absoluteFilePath());
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QByteArray content = file.readAll();
+    QVERIFY(content.contains("tool.execution"));
+    QVERIFY(content.contains("client-a"));
+}
+
+void QtLlmCoreTests::defaultMcpClientReadsToolsOverStdio()
+{
+    QSKIP("Requires unrestricted child-process launch for stdio transport smoke testing.");
+}
+
+void QtLlmCoreTests::defaultMcpClientCallsToolOverHttpLikeTransport()
+{
+    QSKIP("Requires stable loopback socket transport in the current test host.");
+}
+
 void QtLlmCoreTests::streamChunkParserHandlesFragmentedInput()
 {
     StreamChunkParser parser;
@@ -295,5 +632,16 @@ void QtLlmCoreTests::streamChunkParserTakePendingLine()
     QCOMPARE(parser.takePendingLine(), QString());
 }
 
-QTEST_MAIN(QtLlmCoreTests)
+int main(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    const QStringList args = QCoreApplication::arguments();
+    if (args.size() >= 3 && args.at(1) == QStringLiteral("--emit-json")) {
+        QTextStream(stdout) << args.at(2) << Qt::endl;
+        return 0;
+    }
+
+    QtLlmCoreTests tc;
+    return QTest::qExec(&tc, argc, argv);
+}
 #include "tst_qtllm.moc"

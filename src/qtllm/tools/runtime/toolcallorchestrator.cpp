@@ -1,8 +1,25 @@
 #include "toolcallorchestrator.h"
 
+#include "../../logging/qtllmlogger.h"
+
 #include <optional>
+#include <QJsonObject>
 
 namespace qtllm::tools::runtime {
+
+namespace {
+
+logging::LogContext logContextFromExecution(const ToolExecutionContext &context)
+{
+    logging::LogContext logContext;
+    logContext.clientId = context.clientId;
+    logContext.sessionId = context.sessionId;
+    logContext.requestId = context.requestId;
+    logContext.traceId = context.traceId;
+    return logContext;
+}
+
+} // namespace
 
 ToolCallOrchestrator::ToolCallOrchestrator()
     : m_executionLayer(std::make_shared<ToolExecutionLayer>())
@@ -46,12 +63,20 @@ ToolLoopOutcome ToolCallOrchestrator::processAssistantMessage(const QString &mod
 {
     ToolLoopOutcome outcome;
     if (!m_protocolRouter || !m_executionLayer) {
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop skipped because dependencies are missing"),
+                                              logContextFromExecution(context));
         return outcome;
     }
 
     const std::shared_ptr<protocol::IToolCallProtocolAdapter> adapter =
         m_protocolRouter->route(modelName, modelVendor, providerName);
     if (!adapter) {
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop skipped because no protocol adapter was resolved"),
+                                              logContextFromExecution(context),
+                                              QJsonObject{{QStringLiteral("modelName"), modelName},
+                                                          {QStringLiteral("providerName"), providerName}});
         return outcome;
     }
 
@@ -67,12 +92,20 @@ ToolLoopOutcome ToolCallOrchestrator::processAssistantResponse(const QString &mo
 {
     ToolLoopOutcome outcome;
     if (!m_protocolRouter || !m_executionLayer) {
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop skipped because dependencies are missing"),
+                                              logContextFromExecution(context));
         return outcome;
     }
 
     const std::shared_ptr<protocol::IToolCallProtocolAdapter> adapter =
         m_protocolRouter->route(modelName, modelVendor, providerName);
     if (!adapter) {
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop skipped because no protocol adapter was resolved"),
+                                              logContextFromExecution(context),
+                                              QJsonObject{{QStringLiteral("modelName"), modelName},
+                                                          {QStringLiteral("providerName"), providerName}});
         return outcome;
     }
 
@@ -92,6 +125,11 @@ ToolLoopOutcome ToolCallOrchestrator::processAssistantResponse(const QString &mo
         requests = adapter->parseToolCalls(response.text);
     }
 
+    logging::QtLlmLogger::instance().debug(QStringLiteral("tool.loop"),
+                                           QStringLiteral("Parsed tool calls from assistant response"),
+                                           logContextFromExecution(context),
+                                           QJsonObject{{QStringLiteral("toolCallCount"), requests.size()},
+                                                       {QStringLiteral("finishReason"), response.finishReason}});
     return processToolCalls(adapter, requests, response.text, context);
 }
 
@@ -104,6 +142,9 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
 
     const QString key = stateKey(context);
     if (key.isEmpty()) {
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop skipped because state key is empty"),
+                                              logContextFromExecution(context));
         return outcome;
     }
 
@@ -111,6 +152,11 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
     if (state.rounds >= m_maxRounds) {
         outcome.terminatedByFailureGuard = true;
         outcome.consecutiveFailures = state.consecutiveFailures;
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop stopped because max rounds was reached"),
+                                              logContextFromExecution(context),
+                                              QJsonObject{{QStringLiteral("rounds"), state.rounds},
+                                                          {QStringLiteral("maxRounds"), m_maxRounds}});
         return outcome;
     }
 
@@ -150,11 +196,23 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
     outcome.consecutiveFailures = state.consecutiveFailures;
     if (state.consecutiveFailures >= m_maxConsecutiveFailures || state.rounds >= m_maxRounds) {
         outcome.terminatedByFailureGuard = true;
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.loop"),
+                                              QStringLiteral("Tool loop terminated by failure guard"),
+                                              logContextFromExecution(context),
+                                              QJsonObject{{QStringLiteral("rounds"), state.rounds},
+                                                          {QStringLiteral("consecutiveFailures"), state.consecutiveFailures},
+                                                          {QStringLiteral("maxConsecutiveFailures"), m_maxConsecutiveFailures}});
         return outcome;
     }
 
     outcome.hasFollowUpPrompt = true;
     outcome.followUpPrompt = adapter->buildFollowUpPrompt(assistantText, results);
+    logging::QtLlmLogger::instance().info(QStringLiteral("tool.loop"),
+                                          QStringLiteral("Tool loop generated follow-up prompt"),
+                                          logContextFromExecution(context),
+                                          QJsonObject{{QStringLiteral("resultCount"), results.size()},
+                                                      {QStringLiteral("failureCount"), failureCount},
+                                                      {QStringLiteral("rounds"), state.rounds}});
     return outcome;
 }
 

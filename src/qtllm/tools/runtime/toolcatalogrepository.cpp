@@ -1,5 +1,7 @@
 #include "toolcatalogrepository.h"
 
+#include "../../logging/qtllmlogger.h"
+
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -18,6 +20,10 @@ ToolCatalogRepository::ToolCatalogRepository(QString rootDirectory)
 bool ToolCatalogRepository::saveCatalog(const ToolCatalogSnapshot &snapshot, QString *errorMessage) const
 {
     if (!ensureRootDirectory(errorMessage)) {
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Failed to ensure tool catalog directory before save"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("rootDirectory"), m_rootDirectory}});
         return false;
     }
 
@@ -26,6 +32,11 @@ bool ToolCatalogRepository::saveCatalog(const ToolCatalogSnapshot &snapshot, QSt
         if (errorMessage) {
             *errorMessage = QStringLiteral("Failed to open tool catalog for writing: ") + file.errorString();
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Failed to open tool catalog for writing"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                           {QStringLiteral("error"), file.errorString()}});
         return false;
     }
 
@@ -44,6 +55,11 @@ bool ToolCatalogRepository::saveCatalog(const ToolCatalogSnapshot &snapshot, QSt
         if (errorMessage) {
             *errorMessage = QStringLiteral("Failed to write tool catalog: ") + file.errorString();
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Failed to write tool catalog"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                           {QStringLiteral("error"), file.errorString()}});
         return false;
     }
 
@@ -51,9 +67,19 @@ bool ToolCatalogRepository::saveCatalog(const ToolCatalogSnapshot &snapshot, QSt
         if (errorMessage) {
             *errorMessage = QStringLiteral("Failed to commit tool catalog: ") + file.errorString();
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Failed to commit tool catalog"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                           {QStringLiteral("error"), file.errorString()}});
         return false;
     }
 
+    logging::QtLlmLogger::instance().info(QStringLiteral("tool.catalog"),
+                                          QStringLiteral("Tool catalog saved"),
+                                          {},
+                                          QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                      {QStringLiteral("toolCount"), snapshot.tools.size()}});
     return true;
 }
 
@@ -61,6 +87,10 @@ std::optional<ToolCatalogSnapshot> ToolCatalogRepository::loadCatalog(QString *e
 {
     QFile file(catalogPath());
     if (!file.exists()) {
+        logging::QtLlmLogger::instance().debug(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Tool catalog does not exist yet"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("path"), catalogPath()}});
         return std::nullopt;
     }
 
@@ -68,6 +98,11 @@ std::optional<ToolCatalogSnapshot> ToolCatalogRepository::loadCatalog(QString *e
         if (errorMessage) {
             *errorMessage = QStringLiteral("Failed to open tool catalog for reading: ") + file.errorString();
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Failed to open tool catalog for reading"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                           {QStringLiteral("error"), file.errorString()}});
         return std::nullopt;
     }
 
@@ -80,6 +115,11 @@ std::optional<ToolCatalogSnapshot> ToolCatalogRepository::loadCatalog(QString *e
         if (errorMessage) {
             *errorMessage = QStringLiteral("Tool catalog JSON parse error: ") + parseError.errorString();
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.catalog"),
+                                               QStringLiteral("Tool catalog JSON parse error"),
+                                               {},
+                                               QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                           {QStringLiteral("error"), parseError.errorString()}});
         return std::nullopt;
     }
 
@@ -93,14 +133,28 @@ std::optional<ToolCatalogSnapshot> ToolCatalogRepository::loadCatalog(QString *e
         snapshot.updatedAt = updatedAt;
     }
 
+    int skipped = 0;
     const QJsonArray toolsArray = root.value(QStringLiteral("tools")).toArray();
     for (const QJsonValue &value : toolsArray) {
+        if (!value.isObject()) {
+            ++skipped;
+            continue;
+        }
+
         const tools::LlmToolDefinition tool = tools::LlmToolDefinition::fromJson(value.toObject());
         if (!tool.toolId.isEmpty()) {
             snapshot.tools.append(tool);
+        } else {
+            ++skipped;
         }
     }
 
+    logging::QtLlmLogger::instance().info(QStringLiteral("tool.catalog"),
+                                          QStringLiteral("Tool catalog loaded"),
+                                          {},
+                                          QJsonObject{{QStringLiteral("path"), catalogPath()},
+                                                      {QStringLiteral("toolCount"), snapshot.tools.size()},
+                                                      {QStringLiteral("skippedCount"), skipped}});
     return snapshot;
 }
 

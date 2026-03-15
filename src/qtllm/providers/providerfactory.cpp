@@ -1,6 +1,7 @@
-#include "providerfactory.h"
+﻿#include "providerfactory.h"
 
 #include "ollamaprovider.h"
+#include "openaiprovider.h"
 #include "openaicompatibleprovider.h"
 #include "vllmprovider.h"
 
@@ -20,8 +21,11 @@ std::unique_ptr<ILLMProvider> ProviderFactory::create(const QString &providerNam
         return std::make_unique<VllmProvider>();
     }
 
-    if (provider == QStringLiteral("openai")
-        || provider == QStringLiteral("openai-compatible")
+    if (provider == QStringLiteral("openai")) {
+        return std::make_unique<OpenAIProvider>();
+    }
+
+    if (provider == QStringLiteral("openai-compatible")
         || provider == QStringLiteral("sglang")
         || provider == QStringLiteral("anthropic")
         || provider == QStringLiteral("google")
