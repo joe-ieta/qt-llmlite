@@ -22,6 +22,7 @@ public:
     QList<LlmToolDefinition> enabledTools() const;
     bool contains(const QString &toolId) const;
     bool isRemovable(const QString &toolId) const;
+    QString resolveToolId(const QString &toolIdOrName) const;
 
 private:
     QHash<QString, LlmToolDefinition> m_tools;

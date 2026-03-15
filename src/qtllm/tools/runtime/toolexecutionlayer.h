@@ -3,6 +3,7 @@
 #include "toolruntime_types.h"
 #include "toolexecutorregistry.h"
 #include "toolruntimehooks.h"
+#include "../llmtoolregistry.h"
 
 #include <QList>
 
@@ -21,6 +22,7 @@ public:
     ToolExecutionLayer();
 
     void setRegistry(const std::shared_ptr<ToolExecutorRegistry> &registry);
+    void setToolRegistry(const std::shared_ptr<tools::LlmToolRegistry> &toolRegistry);
     void setPolicy(const ToolExecutionPolicy &policy);
     void setHooks(const std::shared_ptr<ToolRuntimeHooks> &hooks);
     void setDryRunFailureMode(bool enabled);
@@ -35,6 +37,7 @@ public:
     bool cancelBySession(const QString &clientId, const QString &sessionId) const;
 
 private:
+    QString resolveToolId(const QString &toolIdOrName) const;
     ToolExecutionResult executeSingle(const ToolCallRequest &request,
                                       const ToolExecutionContext &context,
                                       const ClientToolPolicy &clientPolicy) const;
@@ -44,6 +47,7 @@ private:
 
 private:
     std::shared_ptr<ToolExecutorRegistry> m_registry;
+    std::shared_ptr<tools::LlmToolRegistry> m_toolRegistry;
     std::shared_ptr<ToolRuntimeHooks> m_hooks;
     ToolExecutionPolicy m_policy;
     bool m_dryRunFailureMode = false;

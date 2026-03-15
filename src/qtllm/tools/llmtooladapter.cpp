@@ -16,7 +16,7 @@ QJsonArray DefaultLlmToolAdapter::adaptTools(const QList<LlmToolDefinition> &too
         }
 
         QJsonObject function;
-        function.insert(QStringLiteral("name"), tool.name);
+        function.insert(QStringLiteral("name"), tool.invocationName);
         function.insert(QStringLiteral("description"), tool.description);
         function.insert(QStringLiteral("parameters"), tool.inputSchema);
 

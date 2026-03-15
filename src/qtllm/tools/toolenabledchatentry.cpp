@@ -1,9 +1,31 @@
 #include "toolenabledchatentry.h"
 
+#include "../logging/qtllmlogger.h"
+
 #include <QDateTime>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <optional>
 
 namespace qtllm::tools {
+
+namespace {
+
+logging::LogContext chatContext(const QSharedPointer<chat::ConversationClient> &client,
+                                const QString &requestId,
+                                const QString &traceId)
+{
+    logging::LogContext context;
+    if (client) {
+        context.clientId = client->uid();
+        context.sessionId = client->activeSessionId();
+    }
+    context.requestId = requestId;
+    context.traceId = traceId;
+    return context;
+}
+
+} // namespace
 
 ToolEnabledChatEntry::ToolEnabledChatEntry(const QSharedPointer<chat::ConversationClient> &client,
                                            std::shared_ptr<LlmToolRegistry> toolRegistry,
@@ -15,6 +37,10 @@ ToolEnabledChatEntry::ToolEnabledChatEntry(const QSharedPointer<chat::Conversati
     , m_executionLayer(std::make_shared<runtime::ToolExecutionLayer>())
     , m_orchestrator(std::make_shared<runtime::ToolCallOrchestrator>())
 {
+    if (m_executionLayer) {
+        m_executionLayer->setToolRegistry(m_toolRegistry);
+    }
+
     if (m_orchestrator) {
         m_orchestrator->setExecutionLayer(m_executionLayer);
     }
@@ -24,6 +50,8 @@ ToolEnabledChatEntry::ToolEnabledChatEntry(const QSharedPointer<chat::Conversati
 
         connect(m_client.get(), &chat::ConversationClient::tokenReceived,
                 this, &ToolEnabledChatEntry::tokenReceived);
+        connect(m_client.get(), &chat::ConversationClient::reasoningTokenReceived,
+                this, &ToolEnabledChatEntry::reasoningTokenReceived);
         connect(m_client.get(), &chat::ConversationClient::responseReceived,
                 this, &ToolEnabledChatEntry::onClientResponse);
         connect(m_client.get(), &chat::ConversationClient::errorOccurred,
@@ -34,12 +62,17 @@ ToolEnabledChatEntry::ToolEnabledChatEntry(const QSharedPointer<chat::Conversati
 void ToolEnabledChatEntry::sendUserMessage(const QString &content)
 {
     if (!m_client) {
-        emit errorOccurred(QStringLiteral("ToolEnabledChatEntry has no bound client"));
+        const QString message = QStringLiteral("ToolEnabledChatEntry has no bound client");
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.selection"), message);
+        emit errorOccurred(message);
         return;
     }
 
     const QString trimmed = content.trimmed();
     if (trimmed.isEmpty()) {
+        logging::QtLlmLogger::instance().debug(QStringLiteral("tool.selection"),
+                                               QStringLiteral("Tool-enabled send skipped because input is empty"),
+                                               chatContext(m_client, m_requestId, m_traceId));
         return;
     }
 
@@ -47,7 +80,17 @@ void ToolEnabledChatEntry::sendUserMessage(const QString &content)
         m_orchestrator->resetSession(m_client->uid(), m_client->activeSessionId());
     }
 
-    const QJsonArray tools = selectAndAdaptToolsForTurn(trimmed);
+    QStringList selectedToolIds;
+    const QJsonArray tools = selectAndAdaptToolsForTurn(trimmed, &selectedToolIds);
+    emit toolSelectionPrepared(selectedToolIds);
+    emit toolSchemaPrepared(QString::fromUtf8(QJsonDocument(tools).toJson(QJsonDocument::Indented)));
+
+    logging::QtLlmLogger::instance().info(QStringLiteral("tool.selection"),
+                                          QStringLiteral("Prepared tools for user turn"),
+                                          chatContext(m_client, m_requestId, m_traceId),
+                                          QJsonObject{{QStringLiteral("selectedCount"), selectedToolIds.size()},
+                                                      {QStringLiteral("toolSchemaCount"), tools.size()},
+                                                      {QStringLiteral("inputLength"), trimmed.size()}});
     m_client->sendUserMessageWithTools(trimmed, tools);
 }
 
@@ -67,6 +110,7 @@ void ToolEnabledChatEntry::setExecutionLayer(const std::shared_ptr<runtime::Tool
 {
     if (executionLayer) {
         m_executionLayer = executionLayer;
+        m_executionLayer->setToolRegistry(m_toolRegistry);
         if (m_orchestrator) {
             m_orchestrator->setExecutionLayer(executionLayer);
         }
@@ -106,12 +150,17 @@ QList<runtime::ToolExecutionResult> ToolEnabledChatEntry::executeToolCalls(
     const QList<runtime::ToolCallRequest> &requests)
 {
     if (!m_client) {
-        emit errorOccurred(QStringLiteral("ToolEnabledChatEntry has no bound client"));
+        const QString message = QStringLiteral("ToolEnabledChatEntry has no bound client");
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.execution"), message);
+        emit errorOccurred(message);
         return {};
     }
 
     if (!m_executionLayer) {
-        emit errorOccurred(QStringLiteral("ToolEnabledChatEntry has no execution layer"));
+        const QString message = QStringLiteral("ToolEnabledChatEntry has no execution layer");
+        logging::QtLlmLogger::instance().error(QStringLiteral("tool.execution"), message,
+                                               chatContext(m_client, m_requestId, m_traceId));
+        emit errorOccurred(message);
         return {};
     }
 
@@ -129,13 +178,17 @@ QList<runtime::ToolExecutionResult> ToolEnabledChatEntry::executeToolCalls(
     return m_executionLayer->executeBatch(requests, buildExecutionContext(), policy);
 }
 
-QJsonArray ToolEnabledChatEntry::selectAndAdaptToolsForTurn(const QString &content) const
+QJsonArray ToolEnabledChatEntry::selectAndAdaptToolsForTurn(const QString &content, QStringList *selectedToolIds) const
 {
     if (!m_client || !m_toolRegistry || !m_toolAdapter) {
+        logging::QtLlmLogger::instance().warn(QStringLiteral("tool.selection"),
+                                              QStringLiteral("Tool selection skipped because dependencies are missing"),
+                                              chatContext(m_client, m_requestId, m_traceId));
         return QJsonArray();
     }
 
     QList<LlmToolDefinition> available = m_toolRegistry->enabledTools();
+    const int totalAvailable = available.size();
 
     if (m_clientPolicyRepository) {
         const std::optional<runtime::ClientToolPolicy> policy =
@@ -161,6 +214,21 @@ QJsonArray ToolEnabledChatEntry::selectAndAdaptToolsForTurn(const QString &conte
 
     const QList<LlmToolDefinition> candidates =
         m_selectionLayer.selectTools(m_client->profile(), historyWindow, available);
+
+    if (selectedToolIds) {
+        selectedToolIds->clear();
+        for (const LlmToolDefinition &tool : candidates) {
+            selectedToolIds->append(tool.toolId);
+        }
+    }
+
+    logging::QtLlmLogger::instance().debug(QStringLiteral("tool.selection"),
+                                           QStringLiteral("Tool selection completed"),
+                                           chatContext(m_client, m_requestId, m_traceId),
+                                           QJsonObject{{QStringLiteral("registryEnabledCount"), totalAvailable},
+                                                       {QStringLiteral("policyAllowedCount"), available.size()},
+                                                       {QStringLiteral("selectedCount"), candidates.size()}});
+
     if (candidates.isEmpty()) {
         return QJsonArray();
     }
@@ -189,8 +257,12 @@ runtime::ToolExecutionContext ToolEnabledChatEntry::buildExecutionContext() cons
 void ToolEnabledChatEntry::onClientResponse(const LlmResponse &response)
 {
     const QString text = response.assistantMessage.content.isEmpty() ? response.text : response.assistantMessage.content;
+    logging::QtLlmLogger::instance().info(QStringLiteral("llm.response"),
+                                          QStringLiteral("Conversation client response delivered to UI"),
+                                          chatContext(m_client, m_requestId, m_traceId),
+                                          QJsonObject{{QStringLiteral("assistantTextLength"), text.size()},
+                                                      {QStringLiteral("toolCallCount"), response.assistantMessage.toolCalls.size()}});
     emit completed(text);
 }
 
 } // namespace qtllm::tools
-

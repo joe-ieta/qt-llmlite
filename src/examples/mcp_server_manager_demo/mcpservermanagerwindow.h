@@ -4,9 +4,16 @@
 #include "../../qtllm/tools/mcp/mcpservermanager.h"
 
 #include <QHash>
+#include <QJsonObject>
+#include <QPointer>
 #include <QWidget>
 
 #include <memory>
+
+namespace qtllm::logging {
+struct LogEvent;
+class SignalLogSink;
+}
 
 class QListWidget;
 class QListWidgetItem;
@@ -15,12 +22,14 @@ class QComboBox;
 class QTextEdit;
 class QPushButton;
 class QLabel;
+class McpChatWindow;
 
 class McpServerManagerWindow : public QWidget
 {
     Q_OBJECT
 public:
     explicit McpServerManagerWindow(QWidget *parent = nullptr);
+    ~McpServerManagerWindow() override;
 
 private slots:
     void onScanClicked();
@@ -30,6 +39,8 @@ private slots:
     void onCandidateSelectionChanged();
     void onRegisteredSelectionChanged();
     void onRefreshDetailsClicked();
+    void onOpenChatClicked();
+    void onLogEventReceived(const qtllm::logging::LogEvent &event);
 
 private:
     void loadRegisteredServers();
@@ -41,6 +52,9 @@ private:
     void refreshDetails(const qtllm::tools::mcp::McpServerDefinition &server);
 
     void appendLog(const QString &line);
+    void logInfo(const QString &message, const QJsonObject &fields = QJsonObject()) const;
+    void logWarn(const QString &message, const QJsonObject &fields = QJsonObject()) const;
+    void logError(const QString &message, const QJsonObject &fields = QJsonObject()) const;
 
     QVector<qtllm::tools::mcp::McpServerDefinition> scanPossibleServers() const;
     static QVector<qtllm::tools::mcp::McpServerDefinition> parseServersFromJson(const QJsonObject &root);
@@ -60,6 +74,7 @@ private:
 private:
     std::shared_ptr<qtllm::tools::mcp::McpServerManager> m_serverManager;
     std::shared_ptr<qtllm::tools::mcp::IMcpClient> m_mcpClient;
+    std::shared_ptr<qtllm::logging::SignalLogSink> m_logSink;
 
     QHash<QString, qtllm::tools::mcp::McpServerDefinition> m_candidateById;
     QHash<QString, qtllm::tools::mcp::McpServerDefinition> m_registeredById;
@@ -81,6 +96,7 @@ private:
 
     QListWidget *m_registeredList;
     QPushButton *m_removeButton;
+    QPushButton *m_openChatButton;
 
     QLabel *m_detailTitle;
     QTextEdit *m_detailMeta;
@@ -93,4 +109,8 @@ private:
 
     qtllm::tools::mcp::McpServerDefinition m_selectedServer;
     bool m_hasSelectedServer = false;
+    QPointer<McpChatWindow> m_chatWindow;
 };
+
+
+

@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QObject>
 #include <QSharedPointer>
+#include <QStringList>
 
 #include <memory>
 
@@ -46,11 +47,14 @@ public:
 
 signals:
     void tokenReceived(const QString &token);
+    void reasoningTokenReceived(const QString &token);
     void completed(const QString &text);
     void errorOccurred(const QString &message);
+    void toolSelectionPrepared(const QStringList &toolIds);
+    void toolSchemaPrepared(const QString &schemaText);
 
 private:
-    QJsonArray selectAndAdaptToolsForTurn(const QString &content) const;
+    QJsonArray selectAndAdaptToolsForTurn(const QString &content, QStringList *selectedToolIds = nullptr) const;
     runtime::ToolExecutionContext buildExecutionContext() const;
     void onClientResponse(const LlmResponse &response);
 

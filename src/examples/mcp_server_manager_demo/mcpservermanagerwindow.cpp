@@ -1,5 +1,10 @@
 #include "mcpservermanagerwindow.h"
 
+#include "mcpchatwindow.h"
+
+#include "../../qtllm/logging/logtypes.h"
+#include "../../qtllm/logging/qtllmlogger.h"
+#include "../../qtllm/logging/signallogsink.h"
 #include "../../qtllm/tools/mcp/mcpserverregistry.h"
 
 #include <QComboBox>
@@ -55,6 +60,19 @@ QJsonObject parseJsonObjectText(const QString &text, QString *errorMessage)
     return doc.object();
 }
 
+QString formatLogEvent(const qtllm::logging::LogEvent &event)
+{
+    QString line = QStringLiteral("[%1][%2][%3]")
+                       .arg(event.timestampUtc.toString(QStringLiteral("HH:mm:ss.zzz")),
+                            qtllm::logging::logLevelToString(event.level),
+                            event.category);
+    line += QStringLiteral(" ") + event.message;
+    if (!event.fields.isEmpty()) {
+        line += QStringLiteral(" ") + QString::fromUtf8(QJsonDocument(event.fields).toJson(QJsonDocument::Compact));
+    }
+    return line;
+}
+
 QStringList parseArgs(const QString &text)
 {
     QStringList items = text.split(',', Qt::SkipEmptyParts);
@@ -71,6 +89,7 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     : QWidget(parent)
     , m_serverManager(std::make_shared<qtllm::tools::mcp::McpServerManager>())
     , m_mcpClient(std::make_shared<qtllm::tools::mcp::DefaultMcpClient>())
+    , m_logSink(std::make_shared<qtllm::logging::SignalLogSink>())
     , m_candidateList(new QListWidget(this))
     , m_scanButton(new QPushButton(QStringLiteral("Scan"), this))
     , m_registerButton(new QPushButton(QStringLiteral("Register Selected"), this))
@@ -86,6 +105,7 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     , m_addManualButton(new QPushButton(QStringLiteral("Add"), this))
     , m_registeredList(new QListWidget(this))
     , m_removeButton(new QPushButton(QStringLiteral("Remove Selected"), this))
+    , m_openChatButton(new QPushButton(QStringLiteral("Open Chat Window"), this))
     , m_detailTitle(new QLabel(QStringLiteral("No server selected"), this))
     , m_detailMeta(new QTextEdit(this))
     , m_toolsView(new QTextEdit(this))
@@ -96,6 +116,10 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
 {
     setWindowTitle(QStringLiteral("MCP Server Manager Demo"));
     resize(1400, 860);
+
+    qtllm::logging::QtLlmLogger::instance().addSink(m_logSink);
+    connect(m_logSink.get(), &qtllm::logging::SignalLogSink::logEventReceived,
+            this, &McpServerManagerWindow::onLogEventReceived);
 
     m_transportCombo->addItem(QStringLiteral("stdio"));
     m_transportCombo->addItem(QStringLiteral("streamable-http"));
@@ -146,6 +170,7 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     registeredLayout->addWidget(new QLabel(QStringLiteral("Registered MCP Servers"), this));
     registeredLayout->addWidget(m_registeredList, 1);
     registeredLayout->addWidget(m_removeButton);
+    registeredLayout->addWidget(m_openChatButton);
     auto *registeredPane = new QWidget(this);
     registeredPane->setLayout(registeredLayout);
 
@@ -183,9 +208,15 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     connect(m_candidateList, &QListWidget::itemSelectionChanged, this, &McpServerManagerWindow::onCandidateSelectionChanged);
     connect(m_registeredList, &QListWidget::itemSelectionChanged, this, &McpServerManagerWindow::onRegisteredSelectionChanged);
     connect(m_refreshDetailsButton, &QPushButton::clicked, this, &McpServerManagerWindow::onRefreshDetailsClicked);
+    connect(m_openChatButton, &QPushButton::clicked, this, &McpServerManagerWindow::onOpenChatClicked);
 
     loadRegisteredServers();
     onScanClicked();
+}
+
+McpServerManagerWindow::~McpServerManagerWindow()
+{
+    qtllm::logging::QtLlmLogger::instance().removeSink(m_logSink);
 }
 
 void McpServerManagerWindow::onScanClicked()
@@ -229,6 +260,9 @@ void McpServerManagerWindow::onRegisterSelectedClicked()
     appendLog(QStringLiteral("Registered MCP server: ") + id);
     loadRegisteredServers();
     onScanClicked();
+    if (m_chatWindow) {
+        m_chatWindow->reloadRegisteredServers();
+    }
 }
 
 void McpServerManagerWindow::onAddManualClicked()
@@ -266,6 +300,9 @@ void McpServerManagerWindow::onAddManualClicked()
     appendLog(QStringLiteral("Manually added MCP server: ") + server.serverId);
     loadRegisteredServers();
     onScanClicked();
+    if (m_chatWindow) {
+        m_chatWindow->reloadRegisteredServers();
+    }
 
     m_registeredList->clearSelection();
     for (int i = 0; i < m_registeredList->count(); ++i) {
@@ -295,6 +332,9 @@ void McpServerManagerWindow::onRemoveRegisteredClicked()
     appendLog(QStringLiteral("Removed MCP server: ") + id);
     loadRegisteredServers();
     onScanClicked();
+    if (m_chatWindow) {
+        m_chatWindow->reloadRegisteredServers();
+    }
 
     if (m_hasSelectedServer && normalizeId(m_selectedServer.serverId) == id) {
         clearDetails();
@@ -343,6 +383,18 @@ void McpServerManagerWindow::onRefreshDetailsClicked()
     }
 
     refreshDetails(m_selectedServer);
+}
+
+void McpServerManagerWindow::onOpenChatClicked()
+{
+    if (!m_chatWindow) {
+        m_chatWindow = new McpChatWindow(m_serverManager, m_mcpClient, nullptr);
+    }
+
+    m_chatWindow->show();
+    m_chatWindow->raise();
+    m_chatWindow->activateWindow();
+    m_chatWindow->reloadRegisteredServers();
 }
 
 void McpServerManagerWindow::loadRegisteredServers()
@@ -477,9 +529,19 @@ void McpServerManagerWindow::refreshDetails(const qtllm::tools::mcp::McpServerDe
     appendLog(QStringLiteral("Details refreshed for: ") + server.serverId);
 }
 
+void McpServerManagerWindow::onLogEventReceived(const qtllm::logging::LogEvent &event)
+{
+    if (!event.category.startsWith(QStringLiteral("mcp."))) {
+        return;
+    }
+
+    m_logView->append(formatLogEvent(event));
+}
+
 void McpServerManagerWindow::appendLog(const QString &line)
 {
     m_logView->append(line);
+    qtllm::logging::QtLlmLogger::instance().info(QStringLiteral("ui.mcp.manager"), line);
 }
 
 QVector<qtllm::tools::mcp::McpServerDefinition> McpServerManagerWindow::scanPossibleServers() const
@@ -668,3 +730,22 @@ qtllm::tools::mcp::McpServerDefinition McpServerManagerWindow::buildManualServer
     }
     return server;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

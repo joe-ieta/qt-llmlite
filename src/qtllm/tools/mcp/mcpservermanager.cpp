@@ -1,5 +1,9 @@
 #include "mcpservermanager.h"
 
+#include "../../logging/qtllmlogger.h"
+
+#include <QJsonObject>
+
 namespace qtllm::tools::mcp {
 
 McpServerManager::McpServerManager(std::shared_ptr<McpServerRegistry> registry,
@@ -15,15 +19,23 @@ bool McpServerManager::load(QString *errorMessage)
         if (errorMessage) {
             *errorMessage = QStringLiteral("MCP server manager is not fully configured");
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("mcp.manager"),
+                                               QStringLiteral("MCP server manager load failed because configuration is incomplete"));
         return false;
     }
 
     const std::optional<McpServerSnapshot> snapshot = m_repository->loadServers(errorMessage);
     if (!snapshot.has_value()) {
+        logging::QtLlmLogger::instance().debug(QStringLiteral("mcp.manager"),
+                                               QStringLiteral("No persisted MCP server snapshot was loaded"));
         return true;
     }
 
     m_registry->replaceAll(snapshot->servers, errorMessage);
+    logging::QtLlmLogger::instance().info(QStringLiteral("mcp.manager"),
+                                          QStringLiteral("Persisted MCP servers loaded into registry"),
+                                          {},
+                                          QJsonObject{{QStringLiteral("serverCount"), snapshot->servers.size()}});
     return true;
 }
 
@@ -33,12 +45,21 @@ bool McpServerManager::save(QString *errorMessage) const
         if (errorMessage) {
             *errorMessage = QStringLiteral("MCP server manager is not fully configured");
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("mcp.manager"),
+                                               QStringLiteral("MCP server manager save failed because configuration is incomplete"));
         return false;
     }
 
     McpServerSnapshot snapshot;
     snapshot.servers = m_registry->allServers();
-    return m_repository->saveServers(snapshot, errorMessage);
+    const bool ok = m_repository->saveServers(snapshot, errorMessage);
+    logging::QtLlmLogger::instance().info(QStringLiteral("mcp.manager"),
+                                          ok
+                                              ? QStringLiteral("Persisted MCP servers saved")
+                                              : QStringLiteral("Persisted MCP servers save failed"),
+                                          {},
+                                          QJsonObject{{QStringLiteral("serverCount"), snapshot.servers.size()}});
+    return ok;
 }
 
 bool McpServerManager::registerServer(const McpServerDefinition &server, QString *errorMessage)
@@ -47,6 +68,8 @@ bool McpServerManager::registerServer(const McpServerDefinition &server, QString
         if (errorMessage) {
             *errorMessage = QStringLiteral("MCP server registry is not configured");
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("mcp.manager"),
+                                               QStringLiteral("MCP server registration failed because registry is missing"));
         return false;
     }
 
@@ -63,6 +86,8 @@ bool McpServerManager::updateServer(const McpServerDefinition &server, QString *
         if (errorMessage) {
             *errorMessage = QStringLiteral("MCP server registry is not configured");
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("mcp.manager"),
+                                               QStringLiteral("MCP server update failed because registry is missing"));
         return false;
     }
 
@@ -79,6 +104,8 @@ bool McpServerManager::removeServer(const QString &serverId, QString *errorMessa
         if (errorMessage) {
             *errorMessage = QStringLiteral("MCP server registry is not configured");
         }
+        logging::QtLlmLogger::instance().error(QStringLiteral("mcp.manager"),
+                                               QStringLiteral("MCP server removal failed because registry is missing"));
         return false;
     }
 
