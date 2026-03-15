@@ -8,7 +8,11 @@ INCLUDEPATH += \
     ../../src/qtllm/core \
     ../../src/qtllm/providers \
     ../../src/qtllm/network \
-    ../../src/qtllm/streaming
+    ../../src/qtllm/streaming \
+    ../../src/qtllm/logging \
+    ../../src/qtllm/tools \
+    ../../src/qtllm/tools/runtime \
+    ../../src/qtllm/tools/mcp
 
 SOURCES += \
     tst_qtllm.cpp
