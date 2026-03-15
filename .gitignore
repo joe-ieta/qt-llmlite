@@ -39,3 +39,6 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+# Workspace runtime state
+.qtllm/
+
