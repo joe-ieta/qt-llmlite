@@ -1,4 +1,0 @@
-interface:
-  display_name: "Qt QMake Build Env"
-  short_description: "Bootstrap Qt+MSVC qmake build shell"
-  default_prompt: "Set up a Qt qmake build shell, verify qmake/cl/nmake, then run qmake+nmake in an out-of-source build directory."

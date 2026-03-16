@@ -45,3 +45,6 @@ Thumbs.db
 # Workspace runtime state
 .qtllm/
 
+# Local-only skills
+skills/
+
