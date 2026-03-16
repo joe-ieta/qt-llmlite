@@ -1,4 +1,4 @@
-﻿# qt-llmlite Project Introduction (English)
+# qt-llmlite Project Introduction (English)
 
 ## Positioning
 
@@ -11,14 +11,18 @@ It is no longer only a chat demo baseline. The current foundation includes:
 - Profile-driven context injection (system prompt / persona / preference / thinking style)
 - Tool runtime abstraction (registry / selection / adapter / execution / policy / catalog)
 - Internal tool-loop state machine in `QtLLMClient` with failure guard
-- Vendor protocol field mapping (OpenAI / Anthropic / Google)
-- Alias-based provider onboarding for DeepSeek / Qwen / GLM families
+- Dedicated `OpenAIProvider` for OpenAI `Responses API`
+- `OpenAICompatibleProvider` and Ollama path for `/chat/completions` style services
+- MCP server registration, persistence, tool sync, capability inspection, and MCP-backed tool execution
+- Structured logging with per-client rotated JSONL files and live Qt signal delivery
+- Example applications: `simple_chat`, `multi_client_chat`, `mcp_server_manager_demo`
 
 ## Core Value
 
 - Low-intrusion integration into existing Qt projects
 - Clear upgrade path from basic chat to tool orchestration
 - Stable provider abstraction boundaries for future expansion
+- Observable runtime behavior for debugging provider, tool, and MCP flows
 
 ## Entry Documents
 

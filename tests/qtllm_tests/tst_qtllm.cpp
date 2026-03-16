@@ -124,6 +124,8 @@ private slots:
     void openAiBuildRequestNormalizesResponsesPath();
     void openAiBuildPayloadSanitizesTools();
     void openAiParseResponseParsesFunctionCalls();
+    void openAiParseResponseParsesEventPrefixedSse();
+    void openAiParseResponseParsesStreamingFunctionCallEvents();
     void mcpToolSyncRegistersImportedTools();
     void toolExecutionLayerExecutesMcpToolByInvocationName();
     void fileLogSinkRotatesPerClient();
@@ -451,6 +453,96 @@ void QtLlmCoreTests::openAiParseResponseParsesFunctionCalls()
     QVERIFY(response.success);
     QCOMPARE(response.finishReason, QStringLiteral("completed"));
     QCOMPARE(response.assistantMessage.content, QStringLiteral("Checking files."));
+    QCOMPARE(response.assistantMessage.toolCalls.size(), 1);
+    QCOMPARE(response.assistantMessage.toolCalls.first().id, QStringLiteral("call_1"));
+    QCOMPARE(response.assistantMessage.toolCalls.first().name, QStringLiteral("mcp_filesys2_list_directory"));
+    QCOMPARE(response.assistantMessage.toolCalls.first().arguments.value(QStringLiteral("path")).toString(), QStringLiteral("."));
+}
+
+void QtLlmCoreTests::openAiParseResponseParsesEventPrefixedSse()
+{
+    OpenAIProvider provider;
+
+    const QByteArray sse = R"(event: response.created
+
+data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}
+
+event: response.in_progress
+
+data: {"type":"response.in_progress","response":{"id":"resp_1","status":"in_progress"}}
+
+event: response.output_item.added
+
+data: {"type":"response.output_item.added","item":{"id":"msg_1","type":"message","role":"assistant","content":[]}}
+
+event: response.content_part.added
+
+data: {"type":"response.content_part.added","item_id":"msg_1","part":{"type":"output_text","text":"Hello"}}
+
+event: response.content_part.done
+
+data: {"type":"response.content_part.done","item_id":"msg_1","part":{"type":"output_text","text":"Hello"}}
+
+event: response.output_text.delta
+
+data: {"type":"response.output_text.delta","delta":"Hel"}
+
+event: response.output_text.annotation.added
+
+data: {"type":"response.output_text.annotation.added","annotation":{"type":"file_citation"}}
+
+event: response.output_text.delta
+
+data: {"type":"response.output_text.delta","delta":"lo"}
+
+event: response.output_text.done
+
+data: {"type":"response.output_text.done","text":"Hello"}
+
+event: response.completed
+
+data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Hello"}]}]}}
+
+data: [DONE]
+)";
+
+    const LlmResponse response = provider.parseResponse(sse);
+    QVERIFY(response.success);
+    QCOMPARE(response.finishReason, QStringLiteral("completed"));
+    QCOMPARE(response.assistantMessage.content, QStringLiteral("Hello"));
+    QCOMPARE(response.text, QStringLiteral("Hello"));
+}
+
+void QtLlmCoreTests::openAiParseResponseParsesStreamingFunctionCallEvents()
+{
+    OpenAIProvider provider;
+
+    const QByteArray sse = R"(event: response.created
+
+data: {"type":"response.created","response":{"id":"resp_2","status":"in_progress"}}
+
+event: response.output_item.added
+
+data: {"type":"response.output_item.added","item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"mcp_filesys2_list_directory"}}
+
+event: response.function_call_arguments.delta
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_1","call_id":"call_1","delta":"{\"path\":"}
+
+event: response.function_call_arguments.done
+
+data: {"type":"response.function_call_arguments.done","item_id":"fc_1","call_id":"call_1","name":"mcp_filesys2_list_directory","arguments":"{\"path\":\".\"}"}
+
+event: response.completed
+
+data: {"type":"response.completed","response":{"id":"resp_2","status":"completed","output":[{"type":"function_call","id":"fc_1","call_id":"call_1","name":"mcp_filesys2_list_directory","arguments":"{\"path\":\".\"}"}]}}
+
+data: [DONE]
+)";
+
+    const LlmResponse response = provider.parseResponse(sse);
+    QVERIFY(response.success);
+    QCOMPARE(response.finishReason, QStringLiteral("completed"));
     QCOMPARE(response.assistantMessage.toolCalls.size(), 1);
     QCOMPARE(response.assistantMessage.toolCalls.first().id, QStringLiteral("call_1"));
     QCOMPARE(response.assistantMessage.toolCalls.first().name, QStringLiteral("mcp_filesys2_list_directory"));

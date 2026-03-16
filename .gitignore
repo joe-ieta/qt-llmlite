@@ -1,6 +1,8 @@
 # Qt/qmake build outputs
 build/
 **/build-*/
+**/debug/
+**/release/
 *.o
 *.obj
 *.so
@@ -16,6 +18,7 @@ build/
 *.pro.user
 *.pro.user.*
 Makefile*
+.qmake.stash
 .moc/
 qrc_*.cpp
 moc_*.cpp

@@ -16,11 +16,13 @@
 
 Current baseline includes:
 - multi-client and multi-session conversation persistence
-- provider abstraction with dedicated `OpenAIProvider` and `OpenAICompatibleProvider`
+- dedicated `OpenAIProvider` for OpenAI `Responses API`
+- `OpenAICompatibleProvider` path for Ollama and other `/chat/completions` style endpoints
 - internal tool-call loop in `QtLLMClient`
 - canonical tool registry with built-in tools and MCP-imported external tools
-- MCP server registration, persistence, tool sync, and execution routing
-- structured runtime logging with file rotation and UI signal delivery
+- MCP server registration, persistence, tool sync, capability inspection, and execution routing
+- structured runtime logging with per-client file rotation and UI signal delivery
+- Qt Widgets demos for basic chat, multi-client chat, and MCP server management plus MCP-backed chat
 
 ## Examples
 
