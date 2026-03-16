@@ -428,6 +428,7 @@ void MultiClientWindow::addClientToList(const QString &clientId)
 void MultiClientWindow::bindActiveClient(const QSharedPointer<qtllm::chat::ConversationClient> &client)
 {
     QObject::disconnect(m_tokenConn);
+    QObject::disconnect(m_reasoningConn);
     QObject::disconnect(m_completedConn);
     QObject::disconnect(m_errorConn);
     QObject::disconnect(m_historyConn);
@@ -440,16 +441,33 @@ void MultiClientWindow::bindActiveClient(const QSharedPointer<qtllm::chat::Conve
 
     m_tokenConn = connect(client.get(), &qtllm::chat::ConversationClient::tokenReceived, this, [this](const QString &token) {
         m_output->moveCursor(QTextCursor::End);
+        if (m_reasoningVisible && !m_contentVisible) {
+            m_output->insertPlainText(QStringLiteral("\n[answer] "));
+        }
+        m_contentVisible = true;
+        m_output->insertPlainText(token);
+    });
+
+    m_reasoningConn = connect(client.get(), &qtllm::chat::ConversationClient::reasoningTokenReceived, this, [this](const QString &token) {
+        m_output->moveCursor(QTextCursor::End);
+        if (!m_reasoningVisible) {
+            m_output->insertPlainText(QStringLiteral("\n[thinking] "));
+            m_reasoningVisible = true;
+        }
         m_output->insertPlainText(token);
     });
 
     m_completedConn = connect(client.get(), &qtllm::chat::ConversationClient::completed, this, [this](const QString &) {
         m_output->append(QString());
         m_output->append(QStringLiteral("--- done ---"));
+        m_reasoningVisible = false;
+        m_contentVisible = false;
     });
 
     m_errorConn = connect(client.get(), &qtllm::chat::ConversationClient::errorOccurred, this, [this](const QString &message) {
         m_output->append(QStringLiteral("[error] ") + message);
+        m_reasoningVisible = false;
+        m_contentVisible = false;
     });
 
     m_historyConn = connect(client.get(), &qtllm::chat::ConversationClient::historyChanged, this, [this]() {
@@ -749,6 +767,8 @@ void MultiClientWindow::onSendClicked()
         return;
     }
 
+    m_reasoningVisible = false;
+    m_contentVisible = false;
     m_output->append(QStringLiteral("> ") + prompt);
     m_input->clear();
 

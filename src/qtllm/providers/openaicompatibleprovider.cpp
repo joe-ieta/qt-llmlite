@@ -1,5 +1,6 @@
 #include "openaicompatibleprovider.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -16,6 +17,32 @@ enum class VendorSchema
     OpenAI,
     Anthropic,
     Google
+};
+
+struct StreamEvent
+{
+    QString eventName;
+    QJsonObject object;
+    bool isDoneMarker = false;
+};
+
+struct PendingToolCall
+{
+    QString key;
+    QString id;
+    QString type = QStringLiteral("function");
+    QString name;
+    QString argumentsText;
+};
+
+struct OpenAiStreamState
+{
+    QJsonObject lastRoot;
+    QStringList contentParts;
+    QStringList reasoningParts;
+    QHash<QString, PendingToolCall> toolCalls;
+    QString finishReason;
+    QString errorMessage;
 };
 
 bool containsAny(const QString &text, const QStringList &terms)
@@ -81,6 +108,257 @@ QString resolveVendor(const LlmConfig &config, const LlmRequest &request)
 {
     const QString model = request.model.trimmed().isEmpty() ? config.model : request.model;
     return inferVendor(config.modelVendor, model);
+}
+
+bool looksLikeSsePayload(const QByteArray &data)
+{
+    const QByteArray trimmed = data.trimmed();
+    return trimmed.startsWith("data:")
+        || trimmed.startsWith("event:")
+        || trimmed.contains("\ndata:")
+        || trimmed.contains("\nevent:");
+}
+
+QList<StreamEvent> parseSseEvents(const QByteArray &payload)
+{
+    QList<StreamEvent> events;
+    QString eventName;
+    QList<QByteArray> dataLines;
+
+    const auto flushEvent = [&events, &eventName, &dataLines]() {
+        const QByteArray joined = dataLines.join("\n").trimmed();
+        if (joined.isEmpty()) {
+            eventName.clear();
+            dataLines.clear();
+            return;
+        }
+
+        StreamEvent event;
+        event.eventName = eventName;
+        event.isDoneMarker = joined == "[DONE]";
+        if (!event.isDoneMarker) {
+            const QJsonDocument doc = QJsonDocument::fromJson(joined);
+            if (doc.isObject()) {
+                event.object = doc.object();
+            }
+        }
+
+        events.append(event);
+        eventName.clear();
+        dataLines.clear();
+    };
+
+    const QList<QByteArray> lines = payload.split('\n');
+    for (QByteArray line : lines) {
+        if (line.endsWith('\r')) {
+            line.chop(1);
+        }
+
+        if (line.isEmpty()) {
+            flushEvent();
+            continue;
+        }
+
+        if (line.startsWith(':')) {
+            continue;
+        }
+
+        if (line.startsWith("event:")) {
+            eventName = QString::fromUtf8(line.mid(6).trimmed());
+            continue;
+        }
+
+        if (line.startsWith("data:")) {
+            QByteArray dataLine = line.mid(5);
+            if (dataLine.startsWith(' ')) {
+                dataLine.remove(0, 1);
+            }
+            dataLines.append(dataLine);
+        }
+    }
+
+    flushEvent();
+    return events;
+}
+
+QList<QJsonObject> parseJsonLines(const QByteArray &payload)
+{
+    QList<QJsonObject> objects;
+    const QList<QByteArray> lines = payload.split('\n');
+    for (QByteArray line : lines) {
+        const QByteArray trimmed = line.trimmed();
+        if (trimmed.isEmpty()) {
+            continue;
+        }
+
+        const QJsonDocument doc = QJsonDocument::fromJson(trimmed);
+        if (doc.isObject()) {
+            objects.append(doc.object());
+        }
+    }
+    return objects;
+}
+
+QString collectTextFromValue(const QJsonValue &value)
+{
+    if (value.isString()) {
+        return value.toString();
+    }
+
+    if (!value.isArray()) {
+        return QString();
+    }
+
+    QStringList parts;
+    const QJsonArray array = value.toArray();
+    for (const QJsonValue &entry : array) {
+        const QJsonObject obj = entry.toObject();
+        const QString type = obj.value(QStringLiteral("type")).toString();
+        if (type == QStringLiteral("text")
+            || type == QStringLiteral("output_text")
+            || type == QStringLiteral("input_text")) {
+            const QString text = obj.value(QStringLiteral("text")).toString();
+            if (!text.isEmpty()) {
+                parts.append(text);
+            }
+            continue;
+        }
+
+        if (type == QStringLiteral("refusal")) {
+            const QString refusal = obj.value(QStringLiteral("refusal")).toString();
+            if (!refusal.isEmpty()) {
+                parts.append(refusal);
+            }
+        }
+    }
+
+    return parts.join(QString());
+}
+
+QString collectReasoningFromValue(const QJsonValue &value)
+{
+    if (value.isString()) {
+        return value.toString();
+    }
+
+    if (!value.isArray()) {
+        return QString();
+    }
+
+    QStringList parts;
+    const QJsonArray array = value.toArray();
+    for (const QJsonValue &entry : array) {
+        const QJsonObject obj = entry.toObject();
+        const QString text = obj.value(QStringLiteral("text")).toString(
+            obj.value(QStringLiteral("content")).toString());
+        if (!text.isEmpty()) {
+            parts.append(text);
+        }
+    }
+
+    return parts.join(QString());
+}
+
+QString extractOpenAiReasoning(const QJsonObject &object)
+{
+    QStringList parts;
+
+    const QString thinking = collectReasoningFromValue(object.value(QStringLiteral("thinking")));
+    if (!thinking.isEmpty()) {
+        parts.append(thinking);
+    }
+
+    const QString reasoning = collectReasoningFromValue(object.value(QStringLiteral("reasoning")));
+    if (!reasoning.isEmpty()) {
+        parts.append(reasoning);
+    }
+
+    const QString reasoningContent = collectReasoningFromValue(object.value(QStringLiteral("reasoning_content")));
+    if (!reasoningContent.isEmpty()) {
+        parts.append(reasoningContent);
+    }
+
+    return parts.join(QString());
+}
+
+QString toolCallKey(const QJsonObject &callObj, int fallbackIndex)
+{
+    if (callObj.contains(QStringLiteral("index"))) {
+        return QStringLiteral("index:%1").arg(callObj.value(QStringLiteral("index")).toInt(fallbackIndex));
+    }
+
+    const QString id = callObj.value(QStringLiteral("id")).toString();
+    if (!id.isEmpty()) {
+        return id;
+    }
+
+    return QStringLiteral("index:%1").arg(fallbackIndex);
+}
+
+void mergePendingToolCall(const QJsonObject &callObj, QHash<QString, PendingToolCall> &pendingCalls, bool appendArguments, int fallbackIndex)
+{
+    const QString key = toolCallKey(callObj, fallbackIndex);
+    PendingToolCall &pending = pendingCalls[key];
+    pending.key = key;
+
+    const QString id = callObj.value(QStringLiteral("id")).toString();
+    if (!id.isEmpty()) {
+        pending.id = id;
+    }
+
+    pending.type = callObj.value(QStringLiteral("type")).toString(pending.type);
+
+    const QJsonObject function = callObj.value(QStringLiteral("function")).toObject();
+    pending.name = function.value(QStringLiteral("name")).toString(pending.name);
+
+    const QJsonValue argumentsValue = function.value(QStringLiteral("arguments"));
+    QString argumentsText;
+    if (argumentsValue.isString()) {
+        argumentsText = argumentsValue.toString();
+    } else if (argumentsValue.isObject()) {
+        argumentsText = QString::fromUtf8(QJsonDocument(argumentsValue.toObject()).toJson(QJsonDocument::Compact));
+    }
+
+    if (argumentsText.isEmpty()) {
+        return;
+    }
+
+    if (appendArguments) {
+        pending.argumentsText += argumentsText;
+    } else {
+        pending.argumentsText = argumentsText;
+    }
+}
+
+void appendToolCallsToAssistant(const QHash<QString, PendingToolCall> &pendingCalls, LlmMessage &assistant)
+{
+    for (auto it = pendingCalls.constBegin(); it != pendingCalls.constEnd(); ++it) {
+        if (it->name.trimmed().isEmpty()) {
+            continue;
+        }
+
+        bool exists = false;
+        for (const LlmToolCall &existing : assistant.toolCalls) {
+            if ((!it->id.isEmpty() && existing.id == it->id)
+                || existing.name == it->name) {
+                exists = true;
+                break;
+            }
+        }
+        if (exists) {
+            continue;
+        }
+
+        LlmToolCall call;
+        call.id = !it->id.isEmpty() ? it->id : it->key;
+        call.type = it->type;
+        call.name = it->name;
+        const QJsonDocument argsDoc = QJsonDocument::fromJson(it->argumentsText.toUtf8());
+        if (argsDoc.isObject()) {
+            call.arguments = argsDoc.object();
+        }
+        assistant.toolCalls.append(call);
+    }
 }
 
 QJsonObject toOpenAiMessage(const LlmMessage &message)
@@ -353,51 +631,53 @@ QJsonArray toGoogleContents(const QVector<LlmMessage> &messages, QString *system
 LlmResponse parseOpenAiResponse(const QJsonObject &root)
 {
     LlmResponse response;
+    LlmMessage assistant;
+    assistant.role = QStringLiteral("assistant");
+    QHash<QString, PendingToolCall> pendingCalls;
+    QString reasoningText;
 
-    const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
-    if (choices.isEmpty()) {
-        response.errorMessage = QStringLiteral("No choices found in response");
+    if (root.contains(QStringLiteral("choices"))) {
+        const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
+        if (choices.isEmpty()) {
+            response.errorMessage = QStringLiteral("No choices found in response");
+            return response;
+        }
+
+        const QJsonObject firstChoice = choices.first().toObject();
+        response.finishReason = firstChoice.value(QStringLiteral("finish_reason")).toString();
+
+        const QJsonObject message = firstChoice.value(QStringLiteral("message")).toObject();
+        assistant.role = message.value(QStringLiteral("role")).toString(assistant.role);
+        assistant.content = collectTextFromValue(message.value(QStringLiteral("content")));
+        reasoningText = extractOpenAiReasoning(message);
+
+        const QJsonArray toolCalls = message.value(QStringLiteral("tool_calls")).toArray();
+        for (int index = 0; index < toolCalls.size(); ++index) {
+            mergePendingToolCall(toolCalls.at(index).toObject(), pendingCalls, false, index);
+        }
+    } else if (root.contains(QStringLiteral("message"))) {
+        const QJsonObject message = root.value(QStringLiteral("message")).toObject();
+        assistant.role = message.value(QStringLiteral("role")).toString(assistant.role);
+        assistant.content = collectTextFromValue(message.value(QStringLiteral("content")));
+        reasoningText = extractOpenAiReasoning(message);
+
+        const QJsonArray toolCalls = message.value(QStringLiteral("tool_calls")).toArray();
+        for (int index = 0; index < toolCalls.size(); ++index) {
+            mergePendingToolCall(toolCalls.at(index).toObject(), pendingCalls, false, index);
+        }
+
+        response.finishReason = root.value(QStringLiteral("done_reason")).toString();
+    } else {
+        response.errorMessage = QStringLiteral("No choices or message found in response");
         return response;
     }
 
-    const QJsonObject firstChoice = choices.first().toObject();
-    response.finishReason = firstChoice.value(QStringLiteral("finish_reason")).toString();
-
-    const QJsonObject message = firstChoice.value(QStringLiteral("message")).toObject();
-
-    LlmMessage assistant;
-    assistant.role = QStringLiteral("assistant");
-    assistant.content = message.value(QStringLiteral("content")).toString();
-
-    const QJsonArray toolCalls = message.value(QStringLiteral("tool_calls")).toArray();
-    for (const QJsonValue &value : toolCalls) {
-        const QJsonObject callObj = value.toObject();
-        const QJsonObject function = callObj.value(QStringLiteral("function")).toObject();
-
-        LlmToolCall call;
-        call.id = callObj.value(QStringLiteral("id")).toString();
-        call.type = callObj.value(QStringLiteral("type")).toString(QStringLiteral("function"));
-        call.name = function.value(QStringLiteral("name")).toString();
-
-        const QJsonValue argumentsValue = function.value(QStringLiteral("arguments"));
-        if (argumentsValue.isString()) {
-            const QJsonDocument argsDoc = QJsonDocument::fromJson(argumentsValue.toString().toUtf8());
-            if (argsDoc.isObject()) {
-                call.arguments = argsDoc.object();
-            }
-        } else if (argumentsValue.isObject()) {
-            call.arguments = argumentsValue.toObject();
-        }
-
-        if (!call.name.trimmed().isEmpty()) {
-            assistant.toolCalls.append(call);
-        }
-    }
+    appendToolCallsToAssistant(pendingCalls, assistant);
 
     response.assistantMessage = assistant;
-    response.text = assistant.content;
+    response.text = !assistant.content.isEmpty() ? assistant.content : reasoningText;
 
-    if (!assistant.content.isEmpty() || !assistant.toolCalls.isEmpty()) {
+    if (!response.text.isEmpty() || !assistant.toolCalls.isEmpty()) {
         response.success = true;
     } else {
         response.errorMessage = QStringLiteral("Empty assistant message in response");
@@ -655,51 +935,90 @@ LlmResponse OpenAICompatibleProvider::parseResponse(const QByteArray &data) cons
     const QString vendor = inferVendor(m_config.modelVendor, m_config.model);
     const VendorSchema schema = vendorSchema(vendor);
 
-    if (trimmedData.startsWith("data:")) {
+    if (looksLikeSsePayload(trimmedData)) {
+        const QList<StreamEvent> events = parseSseEvents(trimmedData);
+
+        if (schema == VendorSchema::OpenAI) {
+            OpenAiStreamState state;
+            for (const StreamEvent &event : events) {
+                if (event.isDoneMarker || event.object.isEmpty()) {
+                    continue;
+                }
+
+                const QJsonObject root = event.object;
+                state.lastRoot = root;
+
+                if (root.contains(QStringLiteral("error")) && state.errorMessage.isEmpty()) {
+                    state.errorMessage = root.value(QStringLiteral("error")).toObject()
+                                           .value(QStringLiteral("message")).toString();
+                }
+
+                const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
+                if (choices.isEmpty()) {
+                    continue;
+                }
+
+                const QJsonObject choice = choices.first().toObject();
+                state.finishReason = choice.value(QStringLiteral("finish_reason")).toString(state.finishReason);
+
+                const QJsonObject delta = choice.value(QStringLiteral("delta")).toObject();
+                const QString content = collectTextFromValue(delta.value(QStringLiteral("content")));
+                if (!content.isEmpty()) {
+                    state.contentParts.append(content);
+                }
+
+                const QString reasoning = extractOpenAiReasoning(delta);
+                if (!reasoning.isEmpty()) {
+                    state.reasoningParts.append(reasoning);
+                }
+
+                const QJsonArray deltaToolCalls = delta.value(QStringLiteral("tool_calls")).toArray();
+                for (int index = 0; index < deltaToolCalls.size(); ++index) {
+                    mergePendingToolCall(deltaToolCalls.at(index).toObject(), state.toolCalls, true, index);
+                }
+
+                const QJsonObject message = choice.value(QStringLiteral("message")).toObject();
+                if (!message.isEmpty()) {
+                    const QJsonArray messageToolCalls = message.value(QStringLiteral("tool_calls")).toArray();
+                    for (int index = 0; index < messageToolCalls.size(); ++index) {
+                        mergePendingToolCall(messageToolCalls.at(index).toObject(), state.toolCalls, false, index);
+                    }
+                }
+            }
+
+            if (state.lastRoot.isEmpty()) {
+                LlmResponse response;
+                response.errorMessage = QStringLiteral("Invalid SSE response: no JSON events found");
+                return response;
+            }
+
+            LlmResponse response;
+            response.finishReason = state.finishReason;
+            response.assistantMessage.role = QStringLiteral("assistant");
+            response.assistantMessage.content = !state.contentParts.isEmpty()
+                ? state.contentParts.join(QString())
+                : state.reasoningParts.join(QString());
+            response.text = response.assistantMessage.content;
+            appendToolCallsToAssistant(state.toolCalls, response.assistantMessage);
+            response.success = !response.text.isEmpty() || !response.assistantMessage.toolCalls.isEmpty();
+
+            if (!response.success) {
+                response = parseOpenAiResponse(state.lastRoot);
+                if (!response.success && !state.errorMessage.isEmpty()) {
+                    response.errorMessage = state.errorMessage;
+                }
+                if (!response.success && response.errorMessage.isEmpty()) {
+                    response.errorMessage = QStringLiteral("Empty assistant message in SSE response");
+                }
+            }
+
+            return response;
+        }
+
         QJsonObject lastRoot;
-        QStringList contentParts;
-        QStringList reasoningParts;
-        QString finishReason;
-
-        const QList<QByteArray> lines = trimmedData.split('\n');
-        for (const QByteArray &line : lines) {
-            const QByteArray trimmed = line.trimmed();
-            if (!trimmed.startsWith("data:")) {
-                continue;
-            }
-
-            const QByteArray payload = trimmed.mid(5).trimmed();
-            if (payload.isEmpty() || payload == "[DONE]") {
-                continue;
-            }
-
-            const QJsonDocument doc = QJsonDocument::fromJson(payload);
-            if (!doc.isObject()) {
-                continue;
-            }
-
-            lastRoot = doc.object();
-            if (schema != VendorSchema::OpenAI) {
-                continue;
-            }
-
-            const QJsonArray choices = lastRoot.value(QStringLiteral("choices")).toArray();
-            if (choices.isEmpty()) {
-                continue;
-            }
-
-            const QJsonObject choice = choices.first().toObject();
-            finishReason = choice.value(QStringLiteral("finish_reason")).toString(finishReason);
-            const QJsonObject delta = choice.value(QStringLiteral("delta")).toObject();
-
-            const QString content = delta.value(QStringLiteral("content")).toString();
-            if (!content.isEmpty()) {
-                contentParts.append(content);
-            }
-
-            const QString reasoning = delta.value(QStringLiteral("reasoning")).toString();
-            if (!reasoning.isEmpty()) {
-                reasoningParts.append(reasoning);
+        for (const StreamEvent &event : events) {
+            if (!event.isDoneMarker && !event.object.isEmpty()) {
+                lastRoot = event.object;
             }
         }
 
@@ -713,33 +1032,104 @@ LlmResponse OpenAICompatibleProvider::parseResponse(const QByteArray &data) cons
             return parseAnthropicResponse(lastRoot);
         }
 
-        if (schema == VendorSchema::Google) {
-            return parseGoogleResponse(lastRoot);
-        }
-
-        LlmResponse response;
-        response.finishReason = finishReason;
-        response.assistantMessage.role = QStringLiteral("assistant");
-        response.assistantMessage.content = contentParts.join(QString());
-        if (response.assistantMessage.content.isEmpty()) {
-            response.assistantMessage.content = reasoningParts.join(QString());
-        }
-        response.text = response.assistantMessage.content;
-        response.success = !response.text.isEmpty();
-
-        if (!response.success) {
-            response = parseOpenAiResponse(lastRoot);
-            if (!response.success) {
-                response.errorMessage = QStringLiteral("Empty assistant message in SSE response");
-            }
-        }
-
-        return response;
+        return parseGoogleResponse(lastRoot);
     }
 
     QJsonParseError error;
     const QJsonDocument doc = QJsonDocument::fromJson(trimmedData, &error);
-    if (!doc.isObject()) {
+    if (doc.isObject()) {
+        const QJsonObject root = doc.object();
+        if (schema == VendorSchema::Anthropic || root.contains(QStringLiteral("stop_reason"))) {
+            return parseAnthropicResponse(root);
+        }
+
+        if (schema == VendorSchema::Google || root.contains(QStringLiteral("candidates"))) {
+            return parseGoogleResponse(root);
+        }
+
+        return parseOpenAiResponse(root);
+    }
+
+    if (schema == VendorSchema::OpenAI) {
+        const QList<QJsonObject> jsonLines = parseJsonLines(trimmedData);
+        if (!jsonLines.isEmpty()) {
+            OpenAiStreamState state;
+            for (const QJsonObject &root : jsonLines) {
+                state.lastRoot = root;
+                if (root.contains(QStringLiteral("error")) && state.errorMessage.isEmpty()) {
+                    state.errorMessage = root.value(QStringLiteral("error")).toObject()
+                                           .value(QStringLiteral("message")).toString();
+                }
+
+                if (root.contains(QStringLiteral("choices"))) {
+                    const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
+                    if (!choices.isEmpty()) {
+                        const QJsonObject choice = choices.first().toObject();
+                        state.finishReason = choice.value(QStringLiteral("finish_reason")).toString(state.finishReason);
+
+                        const QJsonObject delta = choice.value(QStringLiteral("delta")).toObject();
+                        const QString content = collectTextFromValue(delta.value(QStringLiteral("content")));
+                        if (!content.isEmpty()) {
+                            state.contentParts.append(content);
+                        }
+
+                        const QString reasoning = extractOpenAiReasoning(delta);
+                        if (!reasoning.isEmpty()) {
+                            state.reasoningParts.append(reasoning);
+                        }
+
+                        const QJsonArray deltaToolCalls = delta.value(QStringLiteral("tool_calls")).toArray();
+                        for (int index = 0; index < deltaToolCalls.size(); ++index) {
+                            mergePendingToolCall(deltaToolCalls.at(index).toObject(), state.toolCalls, true, index);
+                        }
+                    }
+                    continue;
+                }
+
+                if (root.contains(QStringLiteral("message"))) {
+                    const QJsonObject message = root.value(QStringLiteral("message")).toObject();
+                    const QString content = collectTextFromValue(message.value(QStringLiteral("content")));
+                    if (!content.isEmpty()) {
+                        state.contentParts.append(content);
+                    }
+
+                    const QString reasoning = extractOpenAiReasoning(message);
+                    if (!reasoning.isEmpty()) {
+                        state.reasoningParts.append(reasoning);
+                    }
+
+                    const QJsonArray toolCalls = message.value(QStringLiteral("tool_calls")).toArray();
+                    for (int index = 0; index < toolCalls.size(); ++index) {
+                        mergePendingToolCall(toolCalls.at(index).toObject(), state.toolCalls, false, index);
+                    }
+
+                    state.finishReason = root.value(QStringLiteral("done_reason")).toString(state.finishReason);
+                }
+            }
+
+            LlmResponse response;
+            response.finishReason = state.finishReason;
+            response.assistantMessage.role = QStringLiteral("assistant");
+            response.assistantMessage.content = !state.contentParts.isEmpty()
+                ? state.contentParts.join(QString())
+                : state.reasoningParts.join(QString());
+            response.text = response.assistantMessage.content;
+            appendToolCallsToAssistant(state.toolCalls, response.assistantMessage);
+            response.success = !response.text.isEmpty() || !response.assistantMessage.toolCalls.isEmpty();
+
+            if (!response.success && !state.lastRoot.isEmpty()) {
+                response = parseOpenAiResponse(state.lastRoot);
+            }
+            if (!response.success) {
+                response.errorMessage = !state.errorMessage.isEmpty()
+                    ? state.errorMessage
+                    : QStringLiteral("Invalid JSON response: ") + error.errorString();
+            }
+            return response;
+        }
+    }
+
+    {
         LlmResponse response;
         response.errorMessage = QStringLiteral("Invalid JSON response: ")
             + error.errorString()
@@ -747,17 +1137,6 @@ LlmResponse OpenAICompatibleProvider::parseResponse(const QByteArray &data) cons
             + QString::fromUtf8(trimmedData.left(2048));
         return response;
     }
-
-    const QJsonObject root = doc.object();
-    if (schema == VendorSchema::Anthropic || root.contains(QStringLiteral("stop_reason"))) {
-        return parseAnthropicResponse(root);
-    }
-
-    if (schema == VendorSchema::Google || root.contains(QStringLiteral("candidates"))) {
-        return parseGoogleResponse(root);
-    }
-
-    return parseOpenAiResponse(root);
 }
 
 QList<LlmStreamDelta> OpenAICompatibleProvider::parseStreamDeltas(const QByteArray &chunk) const
@@ -770,11 +1149,14 @@ QList<LlmStreamDelta> OpenAICompatibleProvider::parseStreamDeltas(const QByteArr
     const QList<QByteArray> lines = chunk.split('\n');
     for (const QByteArray &line : lines) {
         const QByteArray trimmed = line.trimmed();
-        if (!trimmed.startsWith("data:")) {
+        if (trimmed.isEmpty() || trimmed.startsWith("event:") || trimmed.startsWith(':')) {
             continue;
         }
 
-        const QByteArray payload = trimmed.mid(5).trimmed();
+        QByteArray payload = trimmed;
+        if (trimmed.startsWith("data:")) {
+            payload = trimmed.mid(5).trimmed();
+        }
         if (payload == "[DONE]" || payload.isEmpty()) {
             continue;
         }
@@ -817,13 +1199,33 @@ QList<LlmStreamDelta> OpenAICompatibleProvider::parseStreamDeltas(const QByteArr
             continue;
         }
 
+        if (root.contains(QStringLiteral("message"))) {
+            const QJsonObject message = root.value(QStringLiteral("message")).toObject();
+            const QString content = collectTextFromValue(message.value(QStringLiteral("content")));
+            if (!content.isEmpty()) {
+                LlmStreamDelta streamDelta;
+                streamDelta.channel = QStringLiteral("content");
+                streamDelta.text = content;
+                deltas.append(streamDelta);
+            }
+
+            const QString reasoning = extractOpenAiReasoning(message);
+            if (!reasoning.isEmpty()) {
+                LlmStreamDelta streamDelta;
+                streamDelta.channel = QStringLiteral("reasoning");
+                streamDelta.text = reasoning;
+                deltas.append(streamDelta);
+            }
+            continue;
+        }
+
         const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
         if (choices.isEmpty()) {
             continue;
         }
 
         const QJsonObject delta = choices.first().toObject().value(QStringLiteral("delta")).toObject();
-        const QString content = delta.value(QStringLiteral("content")).toString();
+        const QString content = collectTextFromValue(delta.value(QStringLiteral("content")));
         if (!content.isEmpty()) {
             LlmStreamDelta streamDelta;
             streamDelta.channel = QStringLiteral("content");
@@ -831,7 +1233,7 @@ QList<LlmStreamDelta> OpenAICompatibleProvider::parseStreamDeltas(const QByteArr
             deltas.append(streamDelta);
         }
 
-        const QString reasoning = delta.value(QStringLiteral("reasoning")).toString();
+        const QString reasoning = extractOpenAiReasoning(delta);
         if (!reasoning.isEmpty()) {
             LlmStreamDelta streamDelta;
             streamDelta.channel = QStringLiteral("reasoning");
@@ -845,63 +1247,10 @@ QList<LlmStreamDelta> OpenAICompatibleProvider::parseStreamDeltas(const QByteArr
 QList<QString> OpenAICompatibleProvider::parseStreamTokens(const QByteArray &chunk) const
 {
     QList<QString> tokens;
-
-    const QString vendor = inferVendor(m_config.modelVendor, m_config.model);
-    const VendorSchema schema = vendorSchema(vendor);
-
-    const QList<QByteArray> lines = chunk.split('\n');
-    for (const QByteArray &line : lines) {
-        const QByteArray trimmed = line.trimmed();
-        if (!trimmed.startsWith("data:")) {
-            continue;
-        }
-
-        const QByteArray payload = trimmed.mid(5).trimmed();
-        if (payload == "[DONE]") {
-            continue;
-        }
-
-        const QJsonDocument doc = QJsonDocument::fromJson(payload);
-        if (!doc.isObject()) {
-            continue;
-        }
-
-        const QJsonObject root = doc.object();
-
-        if (schema == VendorSchema::Anthropic || root.contains(QStringLiteral("delta"))) {
-            const QJsonObject delta = root.value(QStringLiteral("delta")).toObject();
-            const QString text = delta.value(QStringLiteral("text")).toString();
-            if (!text.isEmpty()) {
-                tokens.append(text);
-            }
-            continue;
-        }
-
-        if (schema == VendorSchema::Google || root.contains(QStringLiteral("candidates"))) {
-            const QJsonArray candidates = root.value(QStringLiteral("candidates")).toArray();
-            if (!candidates.isEmpty()) {
-                const QJsonArray parts = candidates.first().toObject()
-                                             .value(QStringLiteral("content")).toObject()
-                                             .value(QStringLiteral("parts")).toArray();
-                for (const QJsonValue &partValue : parts) {
-                    const QString text = partValue.toObject().value(QStringLiteral("text")).toString();
-                    if (!text.isEmpty()) {
-                        tokens.append(text);
-                    }
-                }
-            }
-            continue;
-        }
-
-        const QJsonArray choices = root.value(QStringLiteral("choices")).toArray();
-        if (choices.isEmpty()) {
-            continue;
-        }
-
-        const QJsonObject delta = choices.first().toObject().value(QStringLiteral("delta")).toObject();
-        const QString content = delta.value(QStringLiteral("content")).toString();
-        if (!content.isEmpty()) {
-            tokens.append(content);
+    const QList<LlmStreamDelta> deltas = parseStreamDeltas(chunk);
+    for (const LlmStreamDelta &delta : deltas) {
+        if (delta.channel == QStringLiteral("content")) {
+            tokens.append(delta.text);
         }
     }
 

@@ -4,6 +4,7 @@
 #include "../../qtllm/logging/qtllmlogger.h"
 
 #include <QApplication>
+#include <QLoggingCategory>
 #include <QDir>
 #include <QFileInfo>
 
@@ -29,6 +30,7 @@ QString findWorkspaceRoot(const QString &startPath)
 
 int main(int argc, char *argv[])
 {
+    QLoggingCategory::setFilterRules(QStringLiteral("qt.network.monitor.warning=false"));
     QApplication app(argc, argv);
     qRegisterMetaType<qtllm::logging::LogEvent>();
 

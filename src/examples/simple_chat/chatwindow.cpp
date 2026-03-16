@@ -151,14 +151,30 @@ ChatWindow::ChatWindow(QWidget *parent)
     connect(m_sendButton, &QPushButton::clicked, this, &ChatWindow::onSendClicked);
     connect(m_client, &qtllm::QtLLMClient::tokenReceived, this, [this](const QString &token) {
         m_output->moveCursor(QTextCursor::End);
+        if (m_reasoningVisible && !m_contentVisible) {
+            m_output->insertPlainText(QStringLiteral("\n[answer] "));
+        }
+        m_contentVisible = true;
+        m_output->insertPlainText(token);
+    });
+    connect(m_client, &qtllm::QtLLMClient::reasoningTokenReceived, this, [this](const QString &token) {
+        m_output->moveCursor(QTextCursor::End);
+        if (!m_reasoningVisible) {
+            m_output->insertPlainText(QStringLiteral("\n[thinking] "));
+            m_reasoningVisible = true;
+        }
         m_output->insertPlainText(token);
     });
     connect(m_client, &qtllm::QtLLMClient::completed, this, [this](const QString &) {
         m_output->append(QString());
         m_output->append(QStringLiteral("--- done ---"));
+        m_reasoningVisible = false;
+        m_contentVisible = false;
     });
     connect(m_client, &qtllm::QtLLMClient::errorOccurred, this, [this](const QString &message) {
         m_output->append(QStringLiteral("[error] ") + message);
+        m_reasoningVisible = false;
+        m_contentVisible = false;
     });
 
     m_providerCombo->setCurrentIndex(0);
@@ -252,6 +268,8 @@ void ChatWindow::onSendClicked()
 
     applyConfigToClient();
 
+    m_reasoningVisible = false;
+    m_contentVisible = false;
     m_output->append(QStringLiteral("\n> ") + prompt);
     m_input->clear();
     m_client->sendPrompt(prompt);

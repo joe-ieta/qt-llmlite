@@ -80,6 +80,10 @@ ConversationClient::ConversationClient(QString uid, QObject *parent)
         emit tokenReceived(token);
     });
 
+    connect(m_llmClient, &QtLLMClient::reasoningTokenReceived, this, [this](const QString &token) {
+        emit reasoningTokenReceived(token);
+    });
+
     connect(m_llmClient, &QtLLMClient::responseReceived, this, [this](const LlmResponse &response) {
         LlmResponse normalized = response;
 

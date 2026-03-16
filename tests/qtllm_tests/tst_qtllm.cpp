@@ -121,6 +121,9 @@ private slots:
     void openAiCompatibleParseAnthropicResponse();
     void openAiCompatibleParseGoogleResponse();
     void openAiCompatibleParseStreamTokens();
+    void openAiCompatibleParseEventPrefixedSse();
+    void openAiCompatibleParseStreamDeltasReasoningAndToolCalls();
+    void openAiCompatibleParseOllamaJsonLines();
     void openAiBuildRequestNormalizesResponsesPath();
     void openAiBuildPayloadSanitizesTools();
     void openAiParseResponseParsesFunctionCalls();
@@ -371,6 +374,73 @@ void QtLlmCoreTests::openAiCompatibleParseStreamTokens()
     QCOMPARE(tokens.size(), 2);
     QCOMPARE(tokens.at(0), QStringLiteral("Hel"));
     QCOMPARE(tokens.at(1), QStringLiteral("lo"));
+}
+
+void QtLlmCoreTests::openAiCompatibleParseEventPrefixedSse()
+{
+    OpenAICompatibleProvider provider;
+
+    const QByteArray sse = R"(event: message
+
+data: {"choices":[{"delta":{"content":"Hel"}}]}
+
+event: message
+
+data: {"choices":[{"delta":{"content":"lo","reasoning_content":"think"},"finish_reason":"stop"}]}
+
+event: done
+
+data: [DONE]
+)";
+
+    const LlmResponse response = provider.parseResponse(sse);
+    QVERIFY(response.success);
+    QCOMPARE(response.finishReason, QStringLiteral("stop"));
+    QCOMPARE(response.assistantMessage.content, QStringLiteral("Hello"));
+    QCOMPARE(response.text, QStringLiteral("Hello"));
+}
+
+void QtLlmCoreTests::openAiCompatibleParseStreamDeltasReasoningAndToolCalls()
+{
+    OpenAICompatibleProvider provider;
+
+    const QByteArray chunk =
+        "event: message\n"
+        "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\",\"reasoning_content\":\"think\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{\\\"q\\\":\"}}]}}]}\n";
+
+    const QList<LlmStreamDelta> deltas = provider.parseStreamDeltas(chunk);
+    QCOMPARE(deltas.size(), 2);
+    QCOMPARE(deltas.at(0).channel, QStringLiteral("content"));
+    QCOMPARE(deltas.at(0).text, QStringLiteral("Hi"));
+    QCOMPARE(deltas.at(1).channel, QStringLiteral("reasoning"));
+    QCOMPARE(deltas.at(1).text, QStringLiteral("think"));
+}
+
+void QtLlmCoreTests::openAiCompatibleParseOllamaJsonLines()
+{
+    OpenAICompatibleProvider provider;
+
+    const QByteArray jsonLines = R"({"model":"qwen3","message":{"role":"assistant","content":"Hel","thinking":"plan"},"done":false}
+{"model":"qwen3","message":{"role":"assistant","content":"lo"},"done":false}
+{"model":"qwen3","message":{"role":"assistant","tool_calls":[{"function":{"name":"lookup","arguments":{"q":"qt"}}}]},"done":true,"done_reason":"stop"}
+)";
+
+    const LlmResponse response = provider.parseResponse(jsonLines);
+    QVERIFY(response.success);
+    QCOMPARE(response.finishReason, QStringLiteral("stop"));
+    QCOMPARE(response.assistantMessage.content, QStringLiteral("Hello"));
+    QCOMPARE(response.assistantMessage.toolCalls.size(), 1);
+    QCOMPARE(response.assistantMessage.toolCalls.first().name, QStringLiteral("lookup"));
+    QCOMPARE(response.assistantMessage.toolCalls.first().arguments.value(QStringLiteral("q")).toString(), QStringLiteral("qt"));
+
+    const QList<LlmStreamDelta> deltas = provider.parseStreamDeltas(
+        QByteArray(R"({"model":"qwen3","message":{"role":"assistant","content":"Hel","thinking":"plan"},"done":false}
+)"));
+    QCOMPARE(deltas.size(), 2);
+    QCOMPARE(deltas.at(0).channel, QStringLiteral("content"));
+    QCOMPARE(deltas.at(0).text, QStringLiteral("Hel"));
+    QCOMPARE(deltas.at(1).channel, QStringLiteral("reasoning"));
+    QCOMPARE(deltas.at(1).text, QStringLiteral("plan"));
 }
 
 void QtLlmCoreTests::openAiBuildRequestNormalizesResponsesPath()

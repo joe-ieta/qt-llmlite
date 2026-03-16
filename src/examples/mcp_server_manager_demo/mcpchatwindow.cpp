@@ -418,6 +418,7 @@ void McpChatWindow::onSendClicked()
         m_reasoningOutput->append(QString());
     }
     m_reasoningOutput->append(QStringLiteral("[assistant reasoning]"));
+    m_assistantContentTurnActive = false;
     m_reasoningTurnActive = false;
     logInfo(QStringLiteral("ui.mcp.chat"),
             QStringLiteral("Sending chat turn"),
@@ -438,13 +439,26 @@ void McpChatWindow::onClearChatClicked()
     m_selectedToolsView->clear();
     m_toolSchemaView->clear();
     m_requestPayloadView->clear();
+    m_assistantContentTurnActive = false;
     m_reasoningTurnActive = false;
     logInfo(QStringLiteral("ui.mcp.chat"), QStringLiteral("Chat history cleared"));
 }
 
 void McpChatWindow::onContentTokenReceived(const QString &token)
 {
-    Q_UNUSED(token)
+    if (token.isEmpty()) {
+        return;
+    }
+
+    if (!m_assistantContentTurnActive) {
+        if (!m_chatOutput->toPlainText().trimmed().isEmpty()) {
+            m_chatOutput->append(QString());
+        }
+        appendPlainText(m_chatOutput, QStringLiteral("[assistant]\n"));
+        m_assistantContentTurnActive = true;
+    }
+
+    appendPlainText(m_chatOutput, token);
 }
 
 void McpChatWindow::onReasoningTokenReceived(const QString &token)
@@ -484,7 +498,12 @@ void McpChatWindow::onRequestPrepared(const QString &payloadJson)
 
 void McpChatWindow::onChatCompleted(const QString &text)
 {
-    appendChatLine(QStringLiteral("assistant"), text);
+    if (m_assistantContentTurnActive) {
+        appendPlainText(m_chatOutput, QStringLiteral("\n"));
+    } else if (!text.trimmed().isEmpty()) {
+        appendChatLine(QStringLiteral("assistant"), text);
+    }
+    m_assistantContentTurnActive = false;
     if (!m_reasoningTurnActive) {
         appendPlainText(m_reasoningOutput, QStringLiteral("\n(no reasoning emitted)\n"));
     } else {
@@ -495,6 +514,8 @@ void McpChatWindow::onChatCompleted(const QString &text)
 
 void McpChatWindow::onChatError(const QString &message)
 {
+    m_assistantContentTurnActive = false;
+    m_reasoningTurnActive = false;
     logError(QStringLiteral("ui.mcp.chat"), QStringLiteral("Chat error surfaced to window"),
              QJsonObject{{QStringLiteral("error"), message}});
 }

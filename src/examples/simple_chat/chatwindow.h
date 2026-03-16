@@ -51,4 +51,6 @@ private:
     qtllm::QtLLMClient *m_client;
     QNetworkAccessManager *m_networkManager;
     QPointer<QNetworkReply> m_modelsReply;
+    bool m_reasoningVisible = false;
+    bool m_contentVisible = false;
 };

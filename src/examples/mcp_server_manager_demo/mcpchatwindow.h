@@ -112,6 +112,7 @@ private:
     QLineEdit *m_logRequestIdFilter;
     QTextEdit *m_runtimeLog;
 
+    bool m_assistantContentTurnActive = false;
     bool m_reasoningTurnActive = false;
 };
 

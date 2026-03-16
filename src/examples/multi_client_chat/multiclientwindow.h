@@ -127,11 +127,14 @@ private:
     QPushButton *m_applyProfileButton;
 
     QMetaObject::Connection m_tokenConn;
+    QMetaObject::Connection m_reasoningConn;
     QMetaObject::Connection m_completedConn;
     QMetaObject::Connection m_errorConn;
     QMetaObject::Connection m_historyConn;
     QMetaObject::Connection m_sessionsConn;
     QMetaObject::Connection m_activeSessionConn;
+    bool m_reasoningVisible = false;
+    bool m_contentVisible = false;
 };
 
 
