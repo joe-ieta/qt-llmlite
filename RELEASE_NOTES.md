@@ -1,0 +1,9 @@
+## Highlights
+- Added MCP server manager demo and MCP tool routing support
+- Improved OpenAI/OpenAI-compatible SSE parsing
+- Fixed streaming display in `mcp_server_manager_demo`
+- Removed local-only `skills/` directory from repository tracking
+
+## Notes
+- Release tag: `v0.1.0`
+- Merged development branches were cleaned up before release
