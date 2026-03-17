@@ -1,0 +1,976 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import Qt.labs.settings 1.1
+
+ApplicationWindow {
+    id: root
+    width: 1500
+    height: 920
+    visible: true
+    title: "tools_inside"
+    color: "#eee5d8"
+
+    property real timelineScrollX: 0
+    property int laneLabelWidth: 220
+    property real manualPixelsPerTick: 24
+    property bool fitTimeline: false
+    property int tickCount: Math.max(2, Math.ceil(toolsInsideBrowser.timelineDurationMs / Math.max(1, toolsInsideBrowser.timelineTickMs)) + 1)
+    property string selectedTimelineKey: ""
+    property string selectedToolCallId: ""
+    property string selectedSupportLinkId: ""
+    property string selectedArtifactId: ""
+    property color panelBg: "#fffaf2"
+    property color panelAltBg: "#f7efe3"
+    property color panelBorder: "#d8ccb8"
+    property color headerText: "#18222a"
+    property color bodyText: "#31414a"
+    property color mutedText: "#6a787f"
+    property real uiScale: 1.0
+    property int titleFontPx: Math.round(22 * uiScale)
+    property int sectionFontPx: Math.round(18 * uiScale)
+    property int bodyFontPx: Math.round(12 * uiScale)
+    property int smallFontPx: Math.round(11 * uiScale)
+    property int metricFontPx: Math.round(26 * uiScale)
+
+    function effectivePixelsPerTick(viewWidth) {
+        if (fitTimeline) {
+            return Math.max(18, (Math.max(200, viewWidth - laneLabelWidth - 8)) / Math.max(1, tickCount - 1))
+        }
+        return manualPixelsPerTick
+    }
+
+    function zoomIn() {
+        fitTimeline = false
+        manualPixelsPerTick = Math.min(144, manualPixelsPerTick * 1.25)
+    }
+
+    function zoomOut() {
+        fitTimeline = false
+        manualPixelsPerTick = Math.max(6, manualPixelsPerTick / 1.25)
+    }
+
+    function resetZoom() {
+        fitTimeline = false
+        manualPixelsPerTick = 24
+    }
+
+    function timelineEntryKey(entry) {
+        return (entry.laneId || "")
+                + "|" + String(entry.startMs || 0)
+                + "|" + String(entry.endMs || 0)
+                + "|" + (entry.label || "")
+                + "|" + (entry.entryType || "")
+    }
+
+    Settings {
+        category: "display"
+        property alias uiScale: root.uiScale
+        property alias manualPixelsPerTick: root.manualPixelsPerTick
+        property alias fitTimeline: root.fitTimeline
+    }
+
+    Popup {
+        id: settingsPopup
+        x: Math.max(16, root.width - width - 24)
+        y: 60
+        width: 280
+        modal: false
+        focus: true
+        padding: 0
+        background: Rectangle {
+            radius: 14
+            color: "#fffaf2"
+            border.color: "#d8ccb8"
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 12
+
+            Label {
+                text: "Display Settings"
+                font.pixelSize: root.sectionFontPx
+                font.bold: true
+                color: root.headerText
+            }
+
+            Label {
+                text: "Font Scale"
+                color: root.bodyText
+                font.pixelSize: root.bodyFontPx
+            }
+
+            ComboBox {
+                Layout.fillWidth: true
+                model: [
+                    { text: "90%", value: 0.9 },
+                    { text: "100%", value: 1.0 },
+                    { text: "110%", value: 1.1 },
+                    { text: "125%", value: 1.25 },
+                    { text: "140%", value: 1.4 }
+                ]
+                textRole: "text"
+                Component.onCompleted: {
+                    for (var i = 0; i < model.length; ++i) {
+                        if (Math.abs(model[i].value - root.uiScale) < 0.001) {
+                            currentIndex = i
+                            break
+                        }
+                    }
+                }
+                onActivated: root.uiScale = model[index].value
+            }
+
+            Label {
+                text: "Timeline zoom stays on the main toolbar. More display settings can be extended here later."
+                wrapMode: Text.Wrap
+                color: root.mutedText
+                font.pixelSize: root.smallFontPx
+                Layout.fillWidth: true
+            }
+        }
+    }
+
+    header: ToolBar {
+        contentHeight: 48
+        background: Rectangle {
+            color: "#f7f0e5"
+            border.color: "#d8ccb8"
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            spacing: 12
+
+            Label {
+                text: "tools_inside"
+                font.pixelSize: root.titleFontPx
+                font.bold: true
+                color: root.headerText
+            }
+
+            ComboBox {
+                id: historyCombo
+                Layout.preferredWidth: 320
+                Layout.maximumWidth: 420
+                model: toolsInsideBrowser.workspaceHistory
+                enabled: model.length > 0
+                currentIndex: Math.max(0, toolsInsideBrowser.workspaceHistory.indexOf(toolsInsideBrowser.workspaceRoot))
+                onActivated: toolsInsideBrowser.selectWorkspaceHistory(currentText)
+            }
+
+            Label {
+                text: toolsInsideBrowser.workspaceRoot
+                color: root.mutedText
+                Layout.fillWidth: true
+                elide: Label.ElideMiddle
+                font.pixelSize: root.bodyFontPx
+            }
+
+            Button {
+                text: "..."
+                onClicked: toolsInsideBrowser.chooseWorkspaceRoot()
+            }
+            Button { text: "Reload"; onClicked: toolsInsideBrowser.reload() }
+            Button { text: "-"; onClicked: root.zoomOut() }
+            Button {
+                text: root.fitTimeline ? "Fit" : Math.round(root.manualPixelsPerTick) + "px/6ms"
+                onClicked: root.resetZoom()
+            }
+            Button { text: "+"; onClicked: root.zoomIn() }
+            Button {
+                text: "Fit"
+                onClicked: root.fitTimeline = true
+            }
+            Button {
+                text: "Settings"
+                onClicked: settingsPopup.open()
+            }
+            Button {
+                text: "Archive Trace"
+                enabled: toolsInsideBrowser.selectedTraceId.length > 0
+                onClicked: toolsInsideBrowser.archiveSelectedTrace()
+            }
+            Button {
+                text: "Purge Trace"
+                enabled: toolsInsideBrowser.selectedTraceId.length > 0
+                onClicked: toolsInsideBrowser.purgeSelectedTrace()
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#f4efe6"
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 16
+
+            Rectangle {
+                Layout.preferredWidth: 360
+                Layout.fillHeight: true
+                radius: 18
+                color: root.panelBg
+                border.color: root.panelBorder
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 10
+
+                    Label { text: "Client / Session / Trace"; font.pixelSize: root.sectionFontPx; font.bold: true; color: root.headerText }
+
+                    Label { text: "Clients"; font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 160
+                        clip: true
+                        model: toolsInsideBrowser.clients
+                        delegate: Rectangle {
+                            width: ListView.view.width
+                            height: 52
+                            radius: 10
+                            color: modelData.clientId === toolsInsideBrowser.selectedClientId ? "#dde9dc" : "#fcf8f1"
+                            border.color: modelData.clientId === toolsInsideBrowser.selectedClientId ? "#95b08f" : "#ded4c6"
+                            MouseArea { anchors.fill: parent; onClicked: toolsInsideBrowser.selectClient(modelData.clientId) }
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                Text { text: modelData.clientId; font.bold: true; color: root.headerText; elide: Text.ElideRight; width: parent.width }
+                                Text { text: modelData.traceCount + " traces / " + modelData.sessionCount + " sessions"; color: root.mutedText }
+                            }
+                        }
+                    }
+
+                    Label { text: "Sessions"; font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 180
+                        clip: true
+                        model: toolsInsideBrowser.sessions
+                        delegate: Rectangle {
+                            width: ListView.view.width
+                            height: 48
+                            radius: 10
+                            color: modelData.sessionId === toolsInsideBrowser.selectedSessionId ? "#efe0c9" : "#fcf8f1"
+                            border.color: modelData.sessionId === toolsInsideBrowser.selectedSessionId ? "#c7a97e" : "#ded4c6"
+                            MouseArea { anchors.fill: parent; onClicked: toolsInsideBrowser.selectSession(modelData.sessionId) }
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                Text { text: modelData.sessionId; font.bold: true; color: root.headerText; elide: Text.ElideRight; width: parent.width }
+                                Text { text: modelData.traceCount + " traces"; color: root.mutedText }
+                            }
+                        }
+                    }
+
+                    Label { text: "Traces"; font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: toolsInsideBrowser.traces
+                        delegate: Rectangle {
+                            width: ListView.view.width
+                            height: 70
+                            radius: 12
+                            color: modelData.traceId === toolsInsideBrowser.selectedTraceId ? "#f1debf" : "#fcf8f1"
+                            border.color: modelData.traceId === toolsInsideBrowser.selectedTraceId ? "#b77b36" : "#ded4c6"
+                            MouseArea { anchors.fill: parent; onClicked: toolsInsideBrowser.selectTrace(modelData.traceId) }
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 2
+                                Text { text: modelData.traceId; font.bold: true; color: root.headerText; elide: Text.ElideMiddle; width: parent.width }
+                                Text { text: modelData.status + " | " + modelData.provider + " / " + modelData.model; color: root.mutedText; elide: Text.ElideRight; width: parent.width }
+                                Text { text: modelData.turnInputPreview; color: root.bodyText; elide: Text.ElideRight; width: parent.width }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: 20
+                color: root.panelBg
+                border.color: root.panelBorder
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 12
+
+                    Label {
+                        text: toolsInsideBrowser.selectedTraceId.length > 0 ? "Trace Detail" : "Select a trace"
+                        font.pixelSize: Math.round(20 * root.uiScale)
+                        font.bold: true
+                        color: root.headerText
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 104
+                            radius: 14
+                            color: "#f1eadf"
+                            border.color: "#d4c6b3"
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 4
+                                Text {
+                                    text: "Status: " + (toolsInsideBrowser.traceSummary.status || "-")
+                                          + " | Provider: " + (toolsInsideBrowser.traceSummary.provider || "-")
+                                          + " | Model: " + (toolsInsideBrowser.traceSummary.model || "-")
+                                    color: root.bodyText
+                                }
+                                Text { text: "Trace: " + (toolsInsideBrowser.traceSummary.traceId || "-"); color: root.bodyText; elide: Text.ElideMiddle; width: parent.width }
+                                Text { text: "T0: " + (toolsInsideBrowser.traceSummary.t0Utc || "-") + " | Duration: " + (toolsInsideBrowser.traceSummary.durationMs || 0) + " ms | Tick: " + toolsInsideBrowser.timelineTickMs + " ms"; color: root.bodyText; elide: Text.ElideRight; width: parent.width }
+                                Text { text: "Input: " + (toolsInsideBrowser.traceSummary.turnInputPreview || "-"); color: root.mutedText; elide: Text.ElideRight; width: parent.width }
+                            }
+                        }
+
+                        Repeater {
+                            model: [
+                                { "title": "Lanes", "value": toolsInsideBrowser.traceSummary.laneCount || 0, "tone": "#e8dfd0" },
+                                { "title": "Tool Calls", "value": toolsInsideBrowser.toolCalls.length, "tone": "#dfece6" },
+                                { "title": "Support", "value": toolsInsideBrowser.supportLinks.length, "tone": "#e5ebf4" },
+                                { "title": "Artifacts", "value": toolsInsideBrowser.artifacts.length, "tone": "#f0e4d6" }
+                            ]
+                            delegate: Rectangle {
+                                Layout.preferredWidth: 124
+                                Layout.preferredHeight: 104
+                                radius: 14
+                                color: modelData.tone
+                                border.color: "#d2c4b0"
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 6
+                                    Text { text: modelData.title; color: root.mutedText; font.pixelSize: root.bodyFontPx }
+                                    Text { text: String(modelData.value); color: root.headerText; font.pixelSize: root.metricFontPx; font.bold: true }
+                                }
+                            }
+                        }
+                    }
+
+                    SplitView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        orientation: Qt.Vertical
+                        handle: Item {
+                            implicitWidth: parent && parent.orientation === Qt.Horizontal ? 12 : parent ? parent.width : 12
+                            implicitHeight: parent && parent.orientation === Qt.Vertical ? 12 : parent ? parent.height : 12
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width > parent.height ? 56 : 4
+                                height: parent.width > parent.height ? 4 : 56
+                                radius: 2
+                                color: "#a9967a"
+                            }
+                        }
+
+                        Rectangle {
+                            SplitView.fillWidth: true
+                            SplitView.preferredHeight: 540
+                            SplitView.minimumHeight: 360
+                            radius: 16
+                            color: "#f5ede2"
+                            border.color: root.panelBorder
+                            clip: true
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 8
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 42
+                                    radius: 10
+                                    color: "#efe1cf"
+                                    border.color: "#d5c2a8"
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12
+                                        anchors.rightMargin: 12
+                                        spacing: 8
+
+                                        Label {
+                                            text: "Swimlane Timeline (T0 + ms, 6ms ticks)"
+                                            font.bold: true
+                                            font.pixelSize: root.bodyFontPx
+                                            color: root.headerText
+                                        }
+
+                                        Item { Layout.fillWidth: true }
+
+                                        RowLayout {
+                                            spacing: 8
+                                            Rectangle { width: 14; height: 14; radius: 7; color: "#b67632"; border.color: "#845626" }
+                                            Text { text: "Request"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Rectangle { width: 14; height: 14; radius: 7; color: "#557ea0"; border.color: "#40627d" }
+                                            Text { text: "Tool Batch"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Rectangle { width: 14; height: 14; radius: 7; color: "#2f7d73"; border.color: "#235d56" }
+                                            Text { text: "Tool Call"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Rectangle { width: 12; height: 12; rotation: 45; color: "#fff7ea"; border.color: "#6a5c4d" }
+                                            Text { text: "Event"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    id: chartViewport
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    property real tickPixels: root.effectivePixelsPerTick(width)
+                                    property real pixelsPerMs: tickPixels / Math.max(1, toolsInsideBrowser.timelineTickMs)
+                                    property real chartWidth: Math.max(width - root.laneLabelWidth - 8,
+                                                                       root.tickCount * tickPixels)
+
+                                    Column {
+                                        anchors.fill: parent
+                                        spacing: 8
+
+                                        Item {
+                                            width: parent.width
+                                            height: 44
+
+                                            Row {
+                                                anchors.fill: parent
+                                                spacing: 0
+
+                                                Rectangle {
+                                                    width: root.laneLabelWidth
+                                                    height: parent.height
+                                                    color: "#efe5d7"
+                                                    border.color: "#d7c8b2"
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: "Lane / ms"
+                                                        color: root.bodyText
+                                                        font.bold: true
+                                                        font.pixelSize: root.bodyFontPx
+                                                    }
+                                                }
+
+                                                Flickable {
+                                                    id: rulerFlick
+                                                    width: Math.max(0, parent.width - root.laneLabelWidth)
+                                                    height: parent.height
+                                                    contentWidth: chartViewport.chartWidth
+                                                    contentHeight: height
+                                                    clip: true
+                                                    flickableDirection: Flickable.HorizontalFlick
+                                                    boundsBehavior: Flickable.StopAtBounds
+                                                    onContentXChanged: if (movingHorizontally) root.timelineScrollX = contentX
+
+                                                    Binding {
+                                                        target: rulerFlick
+                                                        property: "contentX"
+                                                        value: root.timelineScrollX
+                                                        when: !rulerFlick.movingHorizontally
+                                                    }
+
+                                                    Rectangle {
+                                                        width: chartViewport.chartWidth
+                                                        height: rulerFlick.height
+                                                        color: "#fbf7f0"
+
+                                                        Repeater {
+                                                            model: root.tickCount
+                                                            delegate: Item {
+                                                                x: index * chartViewport.tickPixels
+                                                                width: chartViewport.tickPixels
+                                                                height: parent.height
+
+                                                                Rectangle {
+                                                                    anchors.left: parent.left
+                                                                    anchors.top: parent.top
+                                                                    anchors.bottom: parent.bottom
+                                                                    width: index % 5 === 0 ? 2 : 1
+                                                                    color: index % 5 === 0 ? "#8c6f45" : "#d6c7b1"
+                                                                }
+
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    width: parent.width - 4
+                                                                    horizontalAlignment: Text.AlignHCenter
+                                                                    text: String(index * toolsInsideBrowser.timelineTickMs)
+                                                                    font.pixelSize: root.smallFontPx
+                                                                    color: index % 5 === 0 ? "#664c2d" : root.mutedText
+                                                                    elide: Text.ElideRight
+                                                                    clip: true
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        ListView {
+                                            id: laneList
+                                            width: parent.width
+                                            height: Math.max(0, parent.height - 52)
+                                            clip: true
+                                            spacing: 6
+                                            model: toolsInsideBrowser.timelineLanes
+                                            boundsBehavior: Flickable.StopAtBounds
+
+                                            delegate: RowLayout {
+                                                width: laneList.width
+                                                height: 64
+                                                spacing: 0
+
+                                                Rectangle {
+                                                    Layout.preferredWidth: root.laneLabelWidth
+                                                    Layout.fillHeight: true
+                                                    radius: 10
+                                                    color: modelData.laneKind === "tool" ? "#e3efe9" : (modelData.laneKind === "batch" ? "#e5edf5" : (modelData.laneKind === "request" ? "#efe5d6" : "#ebe4db"))
+                                                    border.color: "#d4c7b6"
+
+                                                    Column {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 8
+                                                        spacing: 2
+                                                        Text { text: modelData.title; font.bold: true; color: root.bodyText; elide: Text.ElideRight; width: parent.width }
+                                                        Text { text: modelData.subtitle || ""; color: root.mutedText; elide: Text.ElideMiddle; width: parent.width }
+                                                    }
+                                                }
+
+                                                Flickable {
+                                                    id: laneFlick
+                                                    Layout.fillWidth: true
+                                                    Layout.fillHeight: true
+                                                    contentWidth: chartViewport.chartWidth
+                                                    contentHeight: height
+                                                    clip: true
+                                                    flickableDirection: Flickable.HorizontalFlick
+                                                    boundsBehavior: Flickable.StopAtBounds
+                                                    onContentXChanged: if (movingHorizontally) root.timelineScrollX = contentX
+
+                                                    Binding {
+                                                        target: laneFlick
+                                                        property: "contentX"
+                                                        value: root.timelineScrollX
+                                                        when: !laneFlick.movingHorizontally
+                                                    }
+
+                                                    Rectangle {
+                                                        width: chartViewport.chartWidth
+                                                        height: laneFlick.height
+                                                        color: "#fdf9f3"
+                                                        border.color: "#e1d7c9"
+                                                        radius: 10
+
+                                                        Repeater {
+                                                            model: root.tickCount
+                                                            delegate: Rectangle {
+                                                                x: index * chartViewport.tickPixels
+                                                                y: 0
+                                                                width: index % 5 === 0 ? 2 : 1
+                                                                height: parent.height
+                                                                color: index % 5 === 0 ? "#d0bca0" : "#efe5d5"
+                                                            }
+                                                        }
+
+                                                        Repeater {
+                                                            model: modelData.entries
+                                                            delegate: Item {
+                                                                id: entryItem
+                                                                property bool isSpan: modelData.entryType === "span"
+                                                                property real startX: modelData.startMs * chartViewport.pixelsPerMs
+                                                                property real barWidth: isSpan ? Math.max(8, (modelData.endMs - modelData.startMs) * chartViewport.pixelsPerMs) : 16
+                                                                property bool selected: root.selectedTimelineKey === root.timelineEntryKey(modelData)
+                                                                x: startX
+                                                                y: isSpan ? 14 : 18
+                                                                width: barWidth
+                                                                height: isSpan ? 28 : 20
+
+                                                                Rectangle {
+                                                                    anchors.fill: parent
+                                                                    radius: entryItem.isSpan ? 8 : 10
+                                                                    color: entryItem.selected ? Qt.lighter(modelData.color, 1.15) : modelData.color
+                                                                    border.color: entryItem.selected ? "#1f2428" : Qt.darker(modelData.color, 1.2)
+                                                                    border.width: entryItem.selected ? 2 : 1
+                                                                }
+
+                                                                Rectangle {
+                                                                    visible: !entryItem.isSpan
+                                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                                    anchors.verticalCenter: parent.verticalCenter
+                                                                    width: 4
+                                                                    height: 30
+                                                                    color: Qt.darker(modelData.color, 1.15)
+                                                                }
+
+                                                                Rectangle {
+                                                                    visible: !entryItem.isSpan
+                                                                    anchors.centerIn: parent
+                                                                    width: 12
+                                                                    height: 12
+                                                                    rotation: 45
+                                                                    color: "#fff7ea"
+                                                                    border.color: Qt.darker(modelData.color, 1.4)
+                                                                }
+
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    width: parent.width - 6
+                                                                    visible: entryItem.isSpan && parent.width >= 70
+                                                                    text: modelData.label
+                                                                    color: "white"
+                                                                    font.pixelSize: root.smallFontPx
+                                                                    elide: Text.ElideRight
+                                                                }
+
+                                                                Text {
+                                                                    visible: !entryItem.isSpan
+                                                                    x: parent.width + 4
+                                                                    y: 1
+                                                                    text: modelData.label
+                                                                    color: root.bodyText
+                                                                    font.pixelSize: root.smallFontPx
+                                                                    elide: Text.ElideRight
+                                                                    width: Math.max(80, laneFlick.width - parent.x - parent.width - 8)
+                                                                }
+
+                                                                MouseArea {
+                                                                    id: entryMouse
+                                                                    anchors.fill: parent
+                                                                    hoverEnabled: true
+                                                                    onClicked: {
+                                                                        root.selectedTimelineKey = root.timelineEntryKey(modelData)
+                                                                        toolsInsideBrowser.inspectTimelineEntry(modelData)
+                                                                    }
+                                                                }
+
+                                                                ToolTip.visible: entryMouse.containsMouse
+                                                                ToolTip.delay: 150
+                                                                ToolTip.text: modelData.label
+                                                                               + "\nStart: T+" + modelData.startMs + "ms"
+                                                                               + (entryItem.isSpan ? ("\nEnd: T+" + modelData.endMs + "ms") : "")
+                                                                               + (modelData.status ? ("\nStatus: " + modelData.status) : "")
+                                                                               + (modelData.detail ? ("\n" + modelData.detail) : "")
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            SplitView.fillWidth: true
+                            SplitView.fillHeight: true
+                            SplitView.minimumHeight: 280
+                            radius: 16
+                            color: root.panelAltBg
+                            border.color: root.panelBorder
+
+                            SplitView {
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                orientation: Qt.Horizontal
+                                handle: Item {
+                                    implicitWidth: parent && parent.orientation === Qt.Horizontal ? 12 : parent ? parent.width : 12
+                                    implicitHeight: parent && parent.orientation === Qt.Vertical ? 12 : parent ? parent.height : 12
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: parent.width > parent.height ? 56 : 4
+                                        height: parent.width > parent.height ? 4 : 56
+                                        radius: 2
+                                        color: "#a9967a"
+                                    }
+                                }
+
+                                Rectangle {
+                                    SplitView.preferredWidth: 320
+                                    SplitView.minimumWidth: 280
+                                    SplitView.fillHeight: true
+                                    radius: 12
+                                    color: "#f7efe3"
+                                    border.color: "#d8ccb8"
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 8
+
+                                        TabBar {
+                                            id: detailTabs
+                                            Layout.fillWidth: true
+                                            TabButton { text: "Tool Calls (" + toolsInsideBrowser.toolCalls.length + ")" }
+                                            TabButton { text: "Support Links (" + toolsInsideBrowser.supportLinks.length + ")" }
+                                            TabButton { text: "Artifacts (" + toolsInsideBrowser.artifacts.length + ")" }
+                                        }
+
+                                        StackLayout {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            currentIndex: detailTabs.currentIndex
+
+                                            ListView {
+                                                clip: true
+                                                model: toolsInsideBrowser.toolCalls
+                                                delegate: Rectangle {
+                                                    width: ListView.view.width
+                                                    height: 54
+                                                    radius: 8
+                                                    color: modelData.toolCallId === root.selectedToolCallId ? "#e5efe9" : "#fcf8f1"
+                                                    border.color: modelData.toolCallId === root.selectedToolCallId ? "#7fa393" : "#ddd1be"
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: {
+                                                            root.selectedToolCallId = modelData.toolCallId
+                                                            root.selectedSupportLinkId = ""
+                                                            root.selectedArtifactId = ""
+                                                            toolsInsideBrowser.inspectToolCall(modelData)
+                                                        }
+                                                    }
+                                                    Column {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 8
+                                                        spacing: 2
+                                                        Text {
+                                                            text: modelData.toolId + " | " + modelData.status
+                                                            color: root.bodyText
+                                                            elide: Text.ElideRight
+                                                            width: parent.width
+                                                            font.bold: true
+                                                        }
+                                                        Text {
+                                                            text: "Round " + modelData.roundIndex + " | " + modelData.requestId
+                                                            color: root.mutedText
+                                                            elide: Text.ElideMiddle
+                                                            width: parent.width
+                                                            font.pixelSize: root.smallFontPx
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            ListView {
+                                                clip: true
+                                                model: toolsInsideBrowser.supportLinks
+                                                delegate: Rectangle {
+                                                    width: ListView.view.width
+                                                    height: 54
+                                                    radius: 8
+                                                    color: modelData.supportLinkId === root.selectedSupportLinkId ? "#e7edf5" : "#fcf8f1"
+                                                    border.color: modelData.supportLinkId === root.selectedSupportLinkId ? "#7c96b8" : "#ddd1be"
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: {
+                                                            root.selectedSupportLinkId = modelData.supportLinkId
+                                                            root.selectedToolCallId = ""
+                                                            root.selectedArtifactId = ""
+                                                            toolsInsideBrowser.inspectSupportLink(modelData)
+                                                        }
+                                                    }
+                                                    Column {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 8
+                                                        spacing: 2
+                                                        Text {
+                                                            text: modelData.supportType + " | " + modelData.source
+                                                            color: root.bodyText
+                                                            elide: Text.ElideRight
+                                                            width: parent.width
+                                                            font.bold: true
+                                                        }
+                                                        Text {
+                                                            text: modelData.toolCallId + " -> " + modelData.targetId
+                                                            color: root.mutedText
+                                                            elide: Text.ElideMiddle
+                                                            width: parent.width
+                                                            font.pixelSize: root.smallFontPx
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            ListView {
+                                                clip: true
+                                                model: toolsInsideBrowser.artifacts
+                                                delegate: Rectangle {
+                                                    width: ListView.view.width
+                                                    height: 54
+                                                    radius: 8
+                                                    color: modelData.artifactId === root.selectedArtifactId ? "#f0e5d7" : "#fcf8f1"
+                                                    border.color: modelData.artifactId === root.selectedArtifactId ? "#bc8d53" : "#ddd1be"
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: {
+                                                            root.selectedArtifactId = modelData.artifactId
+                                                            root.selectedToolCallId = ""
+                                                            root.selectedSupportLinkId = ""
+                                                            toolsInsideBrowser.inspectArtifact(modelData)
+                                                        }
+                                                    }
+                                                    Column {
+                                                        anchors.fill: parent
+                                                        anchors.margins: 8
+                                                        spacing: 2
+                                                        Text {
+                                                            text: modelData.kind
+                                                            color: root.bodyText
+                                                            elide: Text.ElideRight
+                                                            width: parent.width
+                                                            font.bold: true
+                                                        }
+                                                        Text {
+                                                            text: modelData.relativePath
+                                                            color: root.mutedText
+                                                            elide: Text.ElideMiddle
+                                                            width: parent.width
+                                                            font.pixelSize: root.smallFontPx
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    SplitView.fillWidth: true
+                                    SplitView.fillHeight: true
+                                    SplitView.minimumWidth: 560
+                                    radius: 12
+                                    color: root.panelBg
+                                    border.color: root.panelBorder
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 8
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Label { text: "Inspector"; font.bold: true; color: root.headerText }
+                                            Item { Layout.fillWidth: true }
+                                            Button {
+                                                text: "Clear"
+                                                onClicked: {
+                                                    root.selectedTimelineKey = ""
+                                                    root.selectedToolCallId = ""
+                                                    root.selectedSupportLinkId = ""
+                                                    root.selectedArtifactId = ""
+                                                    toolsInsideBrowser.clearInspector()
+                                                }
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 132
+                                            radius: 10
+                                            color: "#f4ecdf"
+                                            border.color: root.panelBorder
+                                            GridLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: 8
+                                                columns: 1
+                                                rowSpacing: 4
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: toolsInsideBrowser.inspector.title || "No selection"
+                                                    font.bold: true
+                                                    font.pixelSize: Math.round(16 * root.uiScale)
+                                                    color: root.headerText
+                                                    wrapMode: Text.Wrap
+                                                }
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: (toolsInsideBrowser.inspector.kind || "")
+                                                          + (toolsInsideBrowser.inspector.sourceType ? (" | " + toolsInsideBrowser.inspector.sourceType) : "")
+                                                          + (toolsInsideBrowser.inspector.sourceId ? (" | " + toolsInsideBrowser.inspector.sourceId) : "")
+                                                    color: root.mutedText
+                                                    wrapMode: Text.WrapAnywhere
+                                                }
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: toolsInsideBrowser.inspector.summary || "Click a swimlane node, tool call, support link, or artifact."
+                                                    color: root.bodyText
+                                                    wrapMode: Text.Wrap
+                                                }
+                                            }
+                                        }
+
+                                        Label { text: "Content"; font.bold: true; color: root.bodyText }
+                                        ScrollView {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+
+                                            background: Rectangle {
+                                                radius: 10
+                                                color: "#fffdf9"
+                                                border.color: "#ded2c1"
+                                            }
+
+                                            TextArea {
+                                                readOnly: true
+                                                wrapMode: TextArea.NoWrap
+                                                text: toolsInsideBrowser.inspector.content || ""
+                                                font.family: Qt.platform.os === "windows" ? "Consolas" : "Monospace"
+                                                font.pixelSize: root.bodyFontPx
+                                                selectByMouse: true
+                                                leftPadding: 12
+                                                rightPadding: 12
+                                                topPadding: 12
+                                                bottomPadding: 12
+                                                background: null
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    footer: Rectangle {
+        height: 38
+        color: "#e9e1d3"
+        border.color: "#d0c2ab"
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            Text {
+                text: toolsInsideBrowser.statusText
+                color: root.mutedText
+                Layout.fillWidth: true
+                verticalAlignment: Text.AlignVCenter
+            }
+            Text {
+                text: "Selected trace: " + (toolsInsideBrowser.selectedTraceId || "-")
+                color: root.bodyText
+                elide: Text.ElideMiddle
+                Layout.preferredWidth: 380
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+    }
+}

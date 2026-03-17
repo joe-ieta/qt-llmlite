@@ -3,6 +3,8 @@
 #include "../core/qtllmclient.h"
 #include "../providers/illmprovider.h"
 #include "../tools/runtime/toolcallorchestrator.h"
+#include "../toolsinside/toolsinsideruntime.h"
+#include "../toolsinside/toolsinsidetracerecorder.h"
 
 #include <QDateTime>
 #include <QJsonDocument>
@@ -109,6 +111,9 @@ ConversationClient::ConversationClient(QString uid, QObject *parent)
         m_pendingAssistantText.clear();
         emit errorOccurred(message);
     });
+
+    connect(m_llmClient, &QtLLMClient::providerPayloadPrepared,
+            this, &ConversationClient::providerPayloadPrepared);
 }
 
 QString ConversationClient::uid() const
@@ -255,18 +260,29 @@ void ConversationClient::sendUserMessage(const QString &content)
     sendUserMessageWithTools(content, QJsonArray());
 }
 
-void ConversationClient::sendUserMessageWithTools(const QString &content, const QJsonArray &tools)
+void ConversationClient::sendUserMessageWithTools(const QString &content,
+                                           const QJsonArray &tools,
+                                           const QString &traceId)
 {
     const QString trimmed = content.trimmed();
     if (trimmed.isEmpty()) {
         return;
     }
 
+    const QString resolvedTraceId = traceId.trimmed().isEmpty()
+        ? QUuid::createUuid().toString(QUuid::WithoutBraces)
+        : traceId.trimmed();
+
     appendMessage(QStringLiteral("user"), trimmed);
     m_pendingAssistantText.clear();
-    m_llmClient->setToolLoopContext(m_uid, m_activeSessionId);
+    m_llmClient->setToolLoopContext(m_uid, m_activeSessionId, resolvedTraceId);
     const LlmRequest request = buildRequestForNextTurn(tools);
-    emit requestPrepared(requestToJsonText(request));
+    const QString requestJson = requestToJsonText(request);
+    emit requestPrepared(requestJson);
+    toolsinside::ToolsInsideRuntime::instance().recorder()->recordRequestPrepared(m_uid,
+                                                                                  m_activeSessionId,
+                                                                                  resolvedTraceId,
+                                                                                  requestJson);
     m_llmClient->sendRequest(request);
 }
 

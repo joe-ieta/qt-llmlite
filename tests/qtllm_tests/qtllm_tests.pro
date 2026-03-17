@@ -1,7 +1,7 @@
 TEMPLATE = app
 TARGET = qtllm_tests
-CONFIG += c++17 testcase console warn_on
-QT += core network testlib
+CONFIG += c++17 testcase console warn_on link_prl
+QT += core network sql testlib
 
 INCLUDEPATH += \
     ../../src/qtllm \

@@ -1,7 +1,7 @@
 TEMPLATE = app
 TARGET = multi_client_chat
-CONFIG += c++17 warn_on
-QT += core gui widgets network
+CONFIG += c++17 warn_on link_prl
+QT += core gui widgets network sql
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 

@@ -17,6 +17,7 @@ struct ToolLoopOutcome
     QString followUpPrompt;
     bool terminatedByFailureGuard = false;
     int consecutiveFailures = 0;
+    int roundIndex = 0;
 };
 
 class ToolCallOrchestrator

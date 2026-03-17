@@ -1,6 +1,8 @@
 #include "toolcallorchestrator.h"
 
 #include "../../logging/qtllmlogger.h"
+#include "../../toolsinside/toolsinsideruntime.h"
+#include "../../toolsinside/toolsinsidetracerecorder.h"
 
 #include <optional>
 #include <QJsonObject>
@@ -149,6 +151,8 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
     }
 
     ToolLoopState state = m_stateBySession.value(key);
+    const int currentRound = state.rounds + 1;
+    outcome.roundIndex = currentRound;
     if (state.rounds >= m_maxRounds) {
         outcome.terminatedByFailureGuard = true;
         outcome.consecutiveFailures = state.consecutiveFailures;
@@ -167,6 +171,12 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
         return outcome;
     }
 
+    toolsinside::ToolsInsideRuntime::instance().recorder()->recordToolCallsParsed(context,
+                                                                                   context.requestId,
+                                                                                   adapter->adapterId(),
+                                                                                   currentRound,
+                                                                                   requests);
+
     ClientToolPolicy policy;
     policy.clientId = context.clientId;
     if (m_policyRepository) {
@@ -176,7 +186,13 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
         }
     }
 
-    const QList<ToolExecutionResult> results = m_executionLayer->executeBatch(requests, context, policy);
+    ToolExecutionContext executionContext = context;
+    executionContext.extra.insert(QStringLiteral("toolLoopRoundIndex"), currentRound);
+    toolsinside::ToolsInsideRuntime::instance().recorder()->recordToolBatchStarted(executionContext,
+                                                                                    context.requestId,
+                                                                                    currentRound,
+                                                                                    requests.size());
+    const QList<ToolExecutionResult> results = m_executionLayer->executeBatch(requests, executionContext, policy);
     int failureCount = 0;
     for (const ToolExecutionResult &result : results) {
         if (!result.success) {
@@ -202,11 +218,21 @@ ToolLoopOutcome ToolCallOrchestrator::processToolCalls(const std::shared_ptr<pro
                                               QJsonObject{{QStringLiteral("rounds"), state.rounds},
                                                           {QStringLiteral("consecutiveFailures"), state.consecutiveFailures},
                                                           {QStringLiteral("maxConsecutiveFailures"), m_maxConsecutiveFailures}});
+        toolsinside::ToolsInsideRuntime::instance().recorder()->recordFailureGuard(executionContext,
+                                                                                    context.requestId,
+                                                                                    currentRound,
+                                                                                    state.consecutiveFailures,
+                                                                                    QStringLiteral("failure_guard"));
         return outcome;
     }
 
     outcome.hasFollowUpPrompt = true;
     outcome.followUpPrompt = adapter->buildFollowUpPrompt(assistantText, results);
+    toolsinside::ToolsInsideRuntime::instance().recorder()->recordFollowUpPrompt(executionContext,
+                                                                                 context.requestId,
+                                                                                 currentRound,
+                                                                                 outcome.followUpPrompt,
+                                                                                 results);
     logging::QtLlmLogger::instance().info(QStringLiteral("tool.loop"),
                                           QStringLiteral("Tool loop generated follow-up prompt"),
                                           logContextFromExecution(context),
