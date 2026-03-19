@@ -199,9 +199,48 @@ struct TimelineLaneBuild
     QString title;
     QString subtitle;
     int laneOrder = 0;
+    int rowCount = 1;
     qint64 firstStartMs = std::numeric_limits<qint64>::max();
     QVariantList entries;
 };
+
+void assignLaneRows(TimelineLaneBuild &lane)
+{
+    constexpr qint64 kEventVisualSpanMs = 6;
+    QList<qint64> rowEndMs;
+    int rowCount = 0;
+
+    for (QVariant &item : lane.entries) {
+        QVariantMap entry = item.toMap();
+        const qint64 startMs = entry.value(QStringLiteral("startMs")).toLongLong();
+        qint64 endMs = entry.value(QStringLiteral("endMs")).toLongLong();
+        if (entry.value(QStringLiteral("entryType")).toString() == QStringLiteral("event")) {
+            endMs = std::max(endMs, startMs + kEventVisualSpanMs);
+        } else if (endMs <= startMs) {
+            endMs = startMs + 1;
+        }
+
+        int assignedRow = -1;
+        for (int row = 0; row < rowEndMs.size(); ++row) {
+            if (startMs >= rowEndMs[row]) {
+                assignedRow = row;
+                rowEndMs[row] = endMs;
+                break;
+            }
+        }
+
+        if (assignedRow < 0) {
+            assignedRow = rowEndMs.size();
+            rowEndMs.append(endMs);
+        }
+
+        rowCount = std::max(rowCount, assignedRow + 1);
+        entry.insert(QStringLiteral("stackIndex"), assignedRow);
+        item = entry;
+    }
+
+    lane.rowCount = std::max(1, rowCount);
+}
 
 void appendLaneEntry(QHash<QString, TimelineLaneBuild> &laneById,
                      QList<QString> &laneIds,
@@ -248,6 +287,7 @@ ToolsInsideBrowser::ToolsInsideBrowser(QObject *parent)
 
 QString ToolsInsideBrowser::workspaceRoot() const { return m_workspaceRoot; }
 QStringList ToolsInsideBrowser::workspaceHistory() const { return m_workspaceHistory; }
+QStringList ToolsInsideBrowser::workspaceFavorites() const { return m_workspaceFavorites; }
 QVariantList ToolsInsideBrowser::clients() const { return m_clients; }
 QVariantList ToolsInsideBrowser::sessions() const { return m_sessions; }
 QVariantList ToolsInsideBrowser::traces() const { return m_traces; }
@@ -307,6 +347,64 @@ void ToolsInsideBrowser::selectWorkspaceHistory(const QString &workspaceRoot)
     if (!workspaceRoot.trimmed().isEmpty()) {
         setWorkspaceRoot(workspaceRoot);
     }
+}
+
+void ToolsInsideBrowser::toggleWorkspaceFavorite(const QString &workspaceRoot)
+{
+    const QString normalized = normalizeWorkspaceRoot(workspaceRoot);
+    if (normalized.isEmpty()) {
+        return;
+    }
+
+    QStringList favorites = m_workspaceFavorites;
+    if (favorites.contains(normalized)) {
+        favorites.removeAll(normalized);
+        setStatusText(QStringLiteral("Workspace removed from favorites"));
+    } else {
+        favorites.prepend(normalized);
+        while (favorites.size() > kMaxWorkspaceFavorites) {
+            favorites.removeLast();
+        }
+        setStatusText(QStringLiteral("Workspace added to favorites"));
+    }
+    favorites.removeDuplicates();
+
+    if (favorites != m_workspaceFavorites) {
+        m_workspaceFavorites = favorites;
+        emit workspaceFavoritesChanged();
+        persistWorkspacePreferences();
+    }
+}
+
+void ToolsInsideBrowser::removeWorkspaceFavorite(const QString &workspaceRoot)
+{
+    const QString normalized = normalizeWorkspaceRoot(workspaceRoot);
+    if (normalized.isEmpty()) {
+        return;
+    }
+
+    QStringList favorites = m_workspaceFavorites;
+    const int removed = favorites.removeAll(normalized);
+    if (removed > 0) {
+        m_workspaceFavorites = favorites;
+        emit workspaceFavoritesChanged();
+        persistWorkspacePreferences();
+        setStatusText(QStringLiteral("Favorite removed"));
+    }
+}
+
+void ToolsInsideBrowser::clearWorkspaceHistory()
+{
+    m_workspaceHistory = QStringList{m_workspaceRoot};
+    emit workspaceHistoryChanged();
+    persistWorkspacePreferences();
+    setStatusText(QStringLiteral("Workspace history cleared"));
+}
+
+bool ToolsInsideBrowser::isFavoriteWorkspace(const QString &workspaceRoot) const
+{
+    const QString normalized = normalizeWorkspaceRoot(workspaceRoot);
+    return !normalized.isEmpty() && m_workspaceFavorites.contains(normalized);
 }
 
 void ToolsInsideBrowser::selectClient(const QString &clientId)
@@ -738,6 +836,7 @@ void ToolsInsideBrowser::reloadTraceDetail()
             }
             return lhs.value(QStringLiteral("startMs")).toLongLong() < rhs.value(QStringLiteral("startMs")).toLongLong();
         });
+        assignLaneRows(lane);
         lanes.append(lane);
     }
 
@@ -758,6 +857,7 @@ void ToolsInsideBrowser::reloadTraceDetail()
             {QStringLiteral("laneKind"), lane.laneKind},
             {QStringLiteral("title"), lane.title},
             {QStringLiteral("subtitle"), lane.subtitle},
+            {QStringLiteral("rowCount"), lane.rowCount},
             {QStringLiteral("entries"), lane.entries}
         });
     }
@@ -821,14 +921,23 @@ void ToolsInsideBrowser::loadWorkspacePreferences()
 {
     QSettings settings(QStringLiteral("qtllm"), QStringLiteral("tools_inside"));
     QStringList history = settings.value(QStringLiteral("workspaceHistory")).toStringList();
+    QStringList favorites = settings.value(QStringLiteral("workspaceFavorites")).toStringList();
     for (QString &path : history) {
         path = QDir::cleanPath(path);
     }
+    for (QString &path : favorites) {
+        path = QDir::cleanPath(path);
+    }
     history.removeDuplicates();
+    favorites.removeDuplicates();
     while (history.size() > kMaxWorkspaceHistory) {
         history.removeLast();
     }
+    while (favorites.size() > kMaxWorkspaceFavorites) {
+        favorites.removeLast();
+    }
     m_workspaceHistory = history;
+    m_workspaceFavorites = favorites;
     const QString storedRoot = QDir::cleanPath(settings.value(QStringLiteral("workspaceRoot"), m_workspaceRoot).toString());
     if (!storedRoot.trimmed().isEmpty()) {
         m_workspaceRoot = storedRoot;
@@ -841,11 +950,12 @@ void ToolsInsideBrowser::persistWorkspacePreferences() const
     QSettings settings(QStringLiteral("qtllm"), QStringLiteral("tools_inside"));
     settings.setValue(QStringLiteral("workspaceRoot"), m_workspaceRoot);
     settings.setValue(QStringLiteral("workspaceHistory"), m_workspaceHistory);
+    settings.setValue(QStringLiteral("workspaceFavorites"), m_workspaceFavorites);
 }
 
 void ToolsInsideBrowser::rememberWorkspaceRoot(const QString &workspaceRoot)
 {
-    const QString normalized = QDir::cleanPath(workspaceRoot.trimmed());
+    const QString normalized = normalizeWorkspaceRoot(workspaceRoot);
     if (normalized.isEmpty()) {
         return;
     }
@@ -863,6 +973,11 @@ void ToolsInsideBrowser::rememberWorkspaceRoot(const QString &workspaceRoot)
         emit workspaceHistoryChanged();
     }
     persistWorkspacePreferences();
+}
+
+QString ToolsInsideBrowser::normalizeWorkspaceRoot(const QString &workspaceRoot) const
+{
+    return QDir::cleanPath(workspaceRoot.trimmed());
 }
 
 void ToolsInsideBrowser::setStatusText(const QString &statusText)

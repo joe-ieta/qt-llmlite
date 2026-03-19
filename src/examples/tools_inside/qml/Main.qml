@@ -9,7 +9,7 @@ ApplicationWindow {
     height: 920
     visible: true
     title: "tools_inside"
-    color: "#eee5d8"
+    color: root.appBg
 
     property real timelineScrollX: 0
     property int laneLabelWidth: 220
@@ -20,12 +20,20 @@ ApplicationWindow {
     property string selectedToolCallId: ""
     property string selectedSupportLinkId: ""
     property string selectedArtifactId: ""
-    property color panelBg: "#fffaf2"
-    property color panelAltBg: "#f7efe3"
-    property color panelBorder: "#d8ccb8"
-    property color headerText: "#18222a"
-    property color bodyText: "#31414a"
-    property color mutedText: "#6a787f"
+    property string themeMode: "win11"
+    property string contrastMode: "normal"
+    property string languageMode: "zh"
+    property color appBg: themeMode === "slate" ? "#dde3e8" : (themeMode === "win11" ? "#f3f5f7" : "#eee5d8")
+    property color contentBg: themeMode === "slate" ? "#e7edf2" : (themeMode === "win11" ? "#f7f9fb" : "#f4efe6")
+    property color panelBg: themeMode === "slate" ? "#f6f8fb" : (themeMode === "win11" ? "#ffffff" : "#fffaf2")
+    property color panelAltBg: themeMode === "slate" ? "#edf2f7" : (themeMode === "win11" ? "#f5f7fa" : "#f7efe3")
+    property color panelBorder: contrastMode === "high" ? (themeMode === "slate" ? "#6b7d8d" : (themeMode === "win11" ? "#7f8b99" : "#9f8563")) : (themeMode === "slate" ? "#c6d1db" : (themeMode === "win11" ? "#d7dde5" : "#d8ccb8"))
+    property color headerBarBg: themeMode === "slate" ? "#eaf0f5" : (themeMode === "win11" ? "#ffffff" : "#f7f0e5")
+    property color headerText: contrastMode === "high" ? "#11161a" : "#18222a"
+    property color bodyText: contrastMode === "high" ? "#18222a" : "#31414a"
+    property color mutedText: contrastMode === "high" ? "#3f505a" : (themeMode === "win11" ? "#5f6b77" : "#6a787f")
+    property color accentBg: themeMode === "slate" ? "#d8e2ec" : (themeMode === "win11" ? "#e9f1fb" : "#efe1cf")
+    property color accentBorder: contrastMode === "high" ? (themeMode === "slate" ? "#567089" : (themeMode === "win11" ? "#6d8eaf" : "#9c7440")) : (themeMode === "slate" ? "#c1cfdd" : (themeMode === "win11" ? "#c7d8ea" : "#d5c2a8"))
     property real uiScale: 1.0
     property int titleFontPx: Math.round(22 * uiScale)
     property int sectionFontPx: Math.round(18 * uiScale)
@@ -63,11 +71,18 @@ ApplicationWindow {
                 + "|" + (entry.entryType || "")
     }
 
+    function uiText(en, zh) {
+        return languageMode === "zh" ? zh : en
+    }
+
     Settings {
         category: "display"
         property alias uiScale: root.uiScale
         property alias manualPixelsPerTick: root.manualPixelsPerTick
         property alias fitTimeline: root.fitTimeline
+        property alias themeMode: root.themeMode
+        property alias contrastMode: root.contrastMode
+        property alias languageMode: root.languageMode
     }
 
     Popup {
@@ -80,8 +95,8 @@ ApplicationWindow {
         padding: 0
         background: Rectangle {
             radius: 14
-            color: "#fffaf2"
-            border.color: "#d8ccb8"
+            color: root.panelBg
+            border.color: root.panelBorder
         }
 
         ColumnLayout {
@@ -90,14 +105,14 @@ ApplicationWindow {
             spacing: 12
 
             Label {
-                text: "Display Settings"
+                text: root.uiText("Display Settings", "显示设置")
                 font.pixelSize: root.sectionFontPx
                 font.bold: true
                 color: root.headerText
             }
 
             Label {
-                text: "Font Scale"
+                text: root.uiText("Font Scale", "字体缩放")
                 color: root.bodyText
                 font.pixelSize: root.bodyFontPx
             }
@@ -124,7 +139,82 @@ ApplicationWindow {
             }
 
             Label {
-                text: "Timeline zoom stays on the main toolbar. More display settings can be extended here later."
+                text: root.uiText("Theme", "主题")
+                color: root.bodyText
+                font.pixelSize: root.bodyFontPx
+            }
+
+            ComboBox {
+                Layout.fillWidth: true
+                model: [
+                    { text: root.uiText("Windows 11 Light", "Windows 11 浅色"), value: "win11" },
+                    { text: root.uiText("Sand", "暖沙"), value: "sand" },
+                    { text: root.uiText("Slate", "石板"), value: "slate" }
+                ]
+                textRole: "text"
+                Component.onCompleted: {
+                    for (var i = 0; i < model.length; ++i) {
+                        if (model[i].value === root.themeMode) {
+                            currentIndex = i
+                            break
+                        }
+                    }
+                }
+                onActivated: root.themeMode = model[index].value
+            }
+
+            Label {
+                text: root.uiText("Contrast", "对比度")
+                color: root.bodyText
+                font.pixelSize: root.bodyFontPx
+            }
+
+            ComboBox {
+                Layout.fillWidth: true
+                model: [
+                    { text: root.uiText("Normal", "标准"), value: "normal" },
+                    { text: root.uiText("High", "高对比"), value: "high" }
+                ]
+                textRole: "text"
+                Component.onCompleted: {
+                    for (var i = 0; i < model.length; ++i) {
+                        if (model[i].value === root.contrastMode) {
+                            currentIndex = i
+                            break
+                        }
+                    }
+                }
+                onActivated: root.contrastMode = model[index].value
+            }
+
+            Label {
+                text: root.uiText("Language", "界面语言")
+                color: root.bodyText
+                font.pixelSize: root.bodyFontPx
+            }
+
+            ComboBox {
+                Layout.fillWidth: true
+                model: [
+                    { text: "English", value: "en" },
+                    { text: "中文", value: "zh" }
+                ]
+                textRole: "text"
+                Component.onCompleted: {
+                    for (var i = 0; i < model.length; ++i) {
+                        if (model[i].value === root.languageMode) {
+                            currentIndex = i
+                            break
+                        }
+                    }
+                }
+                onActivated: root.languageMode = model[index].value
+            }
+
+            Label {
+                text: root.uiText(
+                          "Timeline zoom stays on the main toolbar. This panel now controls font scale, theme, contrast, and language, and can be extended later.",
+                          "时间线缩放仍保留在主工具栏。这个面板当前可控制字体缩放、主题、对比度和界面语言，后续可继续扩展。")
                 wrapMode: Text.Wrap
                 color: root.mutedText
                 font.pixelSize: root.smallFontPx
@@ -133,17 +223,191 @@ ApplicationWindow {
         }
     }
 
+    Popup {
+        id: workspacePopup
+        x: workspaceButton.mapToItem(root.contentItem, 0, 0).x
+        y: workspaceButton.mapToItem(root.contentItem, 0, workspaceButton.height + 8).y
+        width: 420
+        height: 420
+        modal: false
+        focus: true
+        padding: 0
+        background: Rectangle {
+            radius: 14
+            color: root.panelBg
+            border.color: root.panelBorder
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 10
+
+            RowLayout {
+                Layout.fillWidth: true
+                Label {
+                    text: root.uiText("Workspaces", "工作区")
+                    font.pixelSize: root.sectionFontPx
+                    font.bold: true
+                    color: root.headerText
+                }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: toolsInsideBrowser.isFavoriteWorkspace(toolsInsideBrowser.workspaceRoot)
+                          ? root.uiText("Unpin Current", "取消固定当前目录")
+                          : root.uiText("Pin Current", "固定当前目录")
+                    onClicked: toolsInsideBrowser.toggleWorkspaceFavorite(toolsInsideBrowser.workspaceRoot)
+                }
+                Button {
+                    text: root.uiText("Clear Recent", "清空最近目录")
+                    onClicked: toolsInsideBrowser.clearWorkspaceHistory()
+                }
+            }
+
+            Label {
+                text: root.uiText("Favorites", "常用目录")
+                color: root.bodyText
+                font.pixelSize: root.bodyFontPx
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 140
+                clip: true
+                background: Rectangle {
+                    radius: 10
+                    color: root.panelAltBg
+                    border.color: root.panelBorder
+                }
+
+                Column {
+                    width: parent.width
+                    spacing: 6
+
+                    Repeater {
+                        model: toolsInsideBrowser.workspaceFavorites
+                        delegate: Rectangle {
+                            width: parent.width
+                            height: 38
+                            radius: 8
+                            color: modelData === toolsInsideBrowser.workspaceRoot ? "#e3efe9" : "#fcf8f1"
+                            border.color: root.panelBorder
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                spacing: 6
+
+                                Button {
+                                    text: root.uiText("Open", "打开")
+                                    onClicked: toolsInsideBrowser.selectWorkspaceHistory(modelData)
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData
+                                    elide: Label.ElideMiddle
+                                    color: root.bodyText
+                                    font.pixelSize: root.smallFontPx
+                                }
+
+                                Button {
+                                    text: root.uiText("Remove", "移除")
+                                    onClicked: toolsInsideBrowser.removeWorkspaceFavorite(modelData)
+                                }
+                            }
+                        }
+                    }
+
+                    Label {
+                        visible: toolsInsideBrowser.workspaceFavorites.length === 0
+                        text: root.uiText("No pinned workspaces yet.", "还没有固定的工作区。")
+                        color: root.mutedText
+                        font.pixelSize: root.smallFontPx
+                    }
+                }
+            }
+
+            Label {
+                text: root.uiText("Recent", "最近目录")
+                color: root.bodyText
+                font.pixelSize: root.bodyFontPx
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                background: Rectangle {
+                    radius: 10
+                    color: root.panelAltBg
+                    border.color: root.panelBorder
+                }
+
+                Column {
+                    width: parent.width
+                    spacing: 6
+
+                    Repeater {
+                        model: toolsInsideBrowser.workspaceHistory
+                        delegate: Rectangle {
+                            width: parent.width
+                            height: 36
+                            radius: 8
+                            color: modelData === toolsInsideBrowser.workspaceRoot ? "#f1debf" : "#fcf8f1"
+                            border.color: root.panelBorder
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                spacing: 6
+
+                                Button {
+                                    text: root.uiText("Open", "打开")
+                                    onClicked: toolsInsideBrowser.selectWorkspaceHistory(modelData)
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData
+                                    elide: Label.ElideMiddle
+                                    color: root.bodyText
+                                    font.pixelSize: root.smallFontPx
+                                }
+
+                                Button {
+                                    text: toolsInsideBrowser.isFavoriteWorkspace(modelData)
+                                          ? root.uiText("Unpin", "取消固定")
+                                          : root.uiText("Pin", "固定")
+                                    onClicked: toolsInsideBrowser.toggleWorkspaceFavorite(modelData)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     header: ToolBar {
         contentHeight: 48
         background: Rectangle {
-            color: "#f7f0e5"
-            border.color: "#d8ccb8"
+            color: root.headerBarBg
+            border.color: root.panelBorder
         }
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 16
             anchors.rightMargin: 16
             spacing: 12
+
+            Button {
+                id: workspaceButton
+                text: root.uiText("Workspaces", "工作区")
+                onClicked: workspacePopup.open()
+            }
 
             Label {
                 text: "tools_inside"
@@ -154,27 +418,19 @@ ApplicationWindow {
 
             ComboBox {
                 id: historyCombo
-                Layout.preferredWidth: 320
-                Layout.maximumWidth: 420
+                Layout.fillWidth: true
+                Layout.preferredWidth: 420
                 model: toolsInsideBrowser.workspaceHistory
                 enabled: model.length > 0
                 currentIndex: Math.max(0, toolsInsideBrowser.workspaceHistory.indexOf(toolsInsideBrowser.workspaceRoot))
                 onActivated: toolsInsideBrowser.selectWorkspaceHistory(currentText)
             }
 
-            Label {
-                text: toolsInsideBrowser.workspaceRoot
-                color: root.mutedText
-                Layout.fillWidth: true
-                elide: Label.ElideMiddle
-                font.pixelSize: root.bodyFontPx
-            }
-
             Button {
                 text: "..."
                 onClicked: toolsInsideBrowser.chooseWorkspaceRoot()
             }
-            Button { text: "Reload"; onClicked: toolsInsideBrowser.reload() }
+            Button { text: root.uiText("Reload", "刷新"); onClicked: toolsInsideBrowser.reload() }
             Button { text: "-"; onClicked: root.zoomOut() }
             Button {
                 text: root.fitTimeline ? "Fit" : Math.round(root.manualPixelsPerTick) + "px/6ms"
@@ -182,20 +438,20 @@ ApplicationWindow {
             }
             Button { text: "+"; onClicked: root.zoomIn() }
             Button {
-                text: "Fit"
+                text: root.uiText("Fit", "适配")
                 onClicked: root.fitTimeline = true
             }
             Button {
-                text: "Settings"
+                text: root.uiText("Settings", "设置")
                 onClicked: settingsPopup.open()
             }
             Button {
-                text: "Archive Trace"
+                text: root.uiText("Archive Trace", "归档 Trace")
                 enabled: toolsInsideBrowser.selectedTraceId.length > 0
                 onClicked: toolsInsideBrowser.archiveSelectedTrace()
             }
             Button {
-                text: "Purge Trace"
+                text: root.uiText("Purge Trace", "清除 Trace")
                 enabled: toolsInsideBrowser.selectedTraceId.length > 0
                 onClicked: toolsInsideBrowser.purgeSelectedTrace()
             }
@@ -204,7 +460,7 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: "#f4efe6"
+        color: root.contentBg
 
         RowLayout {
             anchors.fill: parent
@@ -223,9 +479,9 @@ ApplicationWindow {
                     anchors.margins: 14
                     spacing: 10
 
-                    Label { text: "Client / Session / Trace"; font.pixelSize: root.sectionFontPx; font.bold: true; color: root.headerText }
+                    Label { text: root.uiText("Client / Session / Trace", "客户端 / 会话 / Trace"); font.pixelSize: root.sectionFontPx; font.bold: true; color: root.headerText }
 
-                    Label { text: "Clients"; font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
+                    Label { text: root.uiText("Clients", "客户端"); font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
                     ListView {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 160
@@ -247,7 +503,7 @@ ApplicationWindow {
                         }
                     }
 
-                    Label { text: "Sessions"; font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
+                    Label { text: root.uiText("Sessions", "会话"); font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
                     ListView {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 180
@@ -269,7 +525,7 @@ ApplicationWindow {
                         }
                     }
 
-                    Label { text: "Traces"; font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
+                    Label { text: root.uiText("Traces", "Trace 列表"); font.bold: true; color: root.bodyText; font.pixelSize: root.bodyFontPx }
                     ListView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -308,7 +564,7 @@ ApplicationWindow {
                     spacing: 12
 
                     Label {
-                        text: toolsInsideBrowser.selectedTraceId.length > 0 ? "Trace Detail" : "Select a trace"
+                        text: toolsInsideBrowser.selectedTraceId.length > 0 ? root.uiText("Trace Detail", "Trace 详情") : root.uiText("Select a trace", "请选择一个 Trace")
                         font.pixelSize: Math.round(20 * root.uiScale)
                         font.bold: true
                         color: root.headerText
@@ -322,21 +578,21 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 104
                             radius: 14
-                            color: "#f1eadf"
-                            border.color: "#d4c6b3"
+                            color: root.panelAltBg
+                            border.color: root.panelBorder
                             Column {
                                 anchors.fill: parent
                                 anchors.margins: 10
                                 spacing: 4
                                 Text {
-                                    text: "Status: " + (toolsInsideBrowser.traceSummary.status || "-")
-                                          + " | Provider: " + (toolsInsideBrowser.traceSummary.provider || "-")
-                                          + " | Model: " + (toolsInsideBrowser.traceSummary.model || "-")
+                                    text: root.uiText("Status: ", "状态：") + (toolsInsideBrowser.traceSummary.status || "-")
+                                          + " | " + root.uiText("Provider: ", "提供方：") + (toolsInsideBrowser.traceSummary.provider || "-")
+                                          + " | " + root.uiText("Model: ", "模型：") + (toolsInsideBrowser.traceSummary.model || "-")
                                     color: root.bodyText
                                 }
-                                Text { text: "Trace: " + (toolsInsideBrowser.traceSummary.traceId || "-"); color: root.bodyText; elide: Text.ElideMiddle; width: parent.width }
-                                Text { text: "T0: " + (toolsInsideBrowser.traceSummary.t0Utc || "-") + " | Duration: " + (toolsInsideBrowser.traceSummary.durationMs || 0) + " ms | Tick: " + toolsInsideBrowser.timelineTickMs + " ms"; color: root.bodyText; elide: Text.ElideRight; width: parent.width }
-                                Text { text: "Input: " + (toolsInsideBrowser.traceSummary.turnInputPreview || "-"); color: root.mutedText; elide: Text.ElideRight; width: parent.width }
+                                Text { text: root.uiText("Trace: ", "Trace：") + (toolsInsideBrowser.traceSummary.traceId || "-"); color: root.bodyText; elide: Text.ElideMiddle; width: parent.width }
+                                Text { text: "T0: " + (toolsInsideBrowser.traceSummary.t0Utc || "-") + " | " + root.uiText("Duration: ", "时长：") + (toolsInsideBrowser.traceSummary.durationMs || 0) + " ms | " + root.uiText("Tick: ", "刻度：") + toolsInsideBrowser.timelineTickMs + " ms"; color: root.bodyText; elide: Text.ElideRight; width: parent.width }
+                                Text { text: root.uiText("Input: ", "输入：") + (toolsInsideBrowser.traceSummary.turnInputPreview || "-"); color: root.mutedText; elide: Text.ElideRight; width: parent.width }
                             }
                         }
 
@@ -385,7 +641,7 @@ ApplicationWindow {
                             SplitView.preferredHeight: 540
                             SplitView.minimumHeight: 360
                             radius: 16
-                            color: "#f5ede2"
+                            color: root.panelAltBg
                             border.color: root.panelBorder
                             clip: true
 
@@ -398,8 +654,8 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 42
                                     radius: 10
-                                    color: "#efe1cf"
-                                    border.color: "#d5c2a8"
+                                    color: root.accentBg
+                                    border.color: root.accentBorder
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -408,7 +664,7 @@ ApplicationWindow {
                                         spacing: 8
 
                                         Label {
-                                            text: "Swimlane Timeline (T0 + ms, 6ms ticks)"
+                                            text: root.uiText("Swimlane Timeline (T0 + ms, 6ms ticks)", "泳道时间线（T0 + 毫秒，6ms 基础刻度）")
                                             font.bold: true
                                             font.pixelSize: root.bodyFontPx
                                             color: root.headerText
@@ -419,13 +675,13 @@ ApplicationWindow {
                                         RowLayout {
                                             spacing: 8
                                             Rectangle { width: 14; height: 14; radius: 7; color: "#b67632"; border.color: "#845626" }
-                                            Text { text: "Request"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Text { text: root.uiText("Request", "模型请求"); color: root.mutedText; font.pixelSize: root.smallFontPx }
                                             Rectangle { width: 14; height: 14; radius: 7; color: "#557ea0"; border.color: "#40627d" }
-                                            Text { text: "Tool Batch"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Text { text: root.uiText("Tool Batch", "工具批次"); color: root.mutedText; font.pixelSize: root.smallFontPx }
                                             Rectangle { width: 14; height: 14; radius: 7; color: "#2f7d73"; border.color: "#235d56" }
-                                            Text { text: "Tool Call"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Text { text: root.uiText("Tool Call", "工具调用"); color: root.mutedText; font.pixelSize: root.smallFontPx }
                                             Rectangle { width: 12; height: 12; rotation: 45; color: "#fff7ea"; border.color: "#6a5c4d" }
-                                            Text { text: "Event"; color: root.mutedText; font.pixelSize: root.smallFontPx }
+                                            Text { text: root.uiText("Event", "事件"); color: root.mutedText; font.pixelSize: root.smallFontPx }
                                         }
                                     }
                                 }
@@ -435,10 +691,12 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     clip: true
+                                    property real leadingGap: 28
                                     property real tickPixels: root.effectivePixelsPerTick(width)
                                     property real pixelsPerMs: tickPixels / Math.max(1, toolsInsideBrowser.timelineTickMs)
+                                    property int labelStride: Math.max(1, Math.ceil((String(Math.max(0, (root.tickCount - 1) * toolsInsideBrowser.timelineTickMs)).length * root.smallFontPx * 0.68 + 10) / Math.max(18, tickPixels)))
                                     property real chartWidth: Math.max(width - root.laneLabelWidth - 8,
-                                                                       root.tickCount * tickPixels)
+                                                                       leadingGap + root.tickCount * tickPixels)
 
                                     Column {
                                         anchors.fill: parent
@@ -459,7 +717,7 @@ ApplicationWindow {
                                                     border.color: "#d7c8b2"
                                                     Text {
                                                         anchors.centerIn: parent
-                                                        text: "Lane / ms"
+                                                        text: root.uiText("Lane / ms", "泳道 / 毫秒")
                                                         color: root.bodyText
                                                         font.bold: true
                                                         font.pixelSize: root.bodyFontPx
@@ -492,7 +750,7 @@ ApplicationWindow {
                                                         Repeater {
                                                             model: root.tickCount
                                                             delegate: Item {
-                                                                x: index * chartViewport.tickPixels
+                                                                x: chartViewport.leadingGap + index * chartViewport.tickPixels
                                                                 width: chartViewport.tickPixels
                                                                 height: parent.height
 
@@ -513,6 +771,7 @@ ApplicationWindow {
                                                                     color: index % 5 === 0 ? "#664c2d" : root.mutedText
                                                                     elide: Text.ElideRight
                                                                     clip: true
+                                                                    visible: index % chartViewport.labelStride === 0
                                                                 }
                                                             }
                                                         }
@@ -532,7 +791,7 @@ ApplicationWindow {
 
                                             delegate: RowLayout {
                                                 width: laneList.width
-                                                height: 64
+                                                height: Math.max(64, 20 + Math.max(1, modelData.rowCount || 1) * 24)
                                                 spacing: 0
 
                                                 Rectangle {
@@ -579,7 +838,7 @@ ApplicationWindow {
                                                         Repeater {
                                                             model: root.tickCount
                                                             delegate: Rectangle {
-                                                                x: index * chartViewport.tickPixels
+                                                                x: chartViewport.leadingGap + index * chartViewport.tickPixels
                                                                 y: 0
                                                                 width: index % 5 === 0 ? 2 : 1
                                                                 height: parent.height
@@ -592,11 +851,11 @@ ApplicationWindow {
                                                             delegate: Item {
                                                                 id: entryItem
                                                                 property bool isSpan: modelData.entryType === "span"
-                                                                property real startX: modelData.startMs * chartViewport.pixelsPerMs
+                                                                property real startX: chartViewport.leadingGap + modelData.startMs * chartViewport.pixelsPerMs
                                                                 property real barWidth: isSpan ? Math.max(8, (modelData.endMs - modelData.startMs) * chartViewport.pixelsPerMs) : 16
                                                                 property bool selected: root.selectedTimelineKey === root.timelineEntryKey(modelData)
                                                                 x: startX
-                                                                y: isSpan ? 14 : 18
+                                                                y: 10 + (modelData.stackIndex || 0) * 22 + (isSpan ? 0 : 2)
                                                                 width: barWidth
                                                                 height: isSpan ? 28 : 20
 
@@ -705,8 +964,8 @@ ApplicationWindow {
                                     SplitView.minimumWidth: 280
                                     SplitView.fillHeight: true
                                     radius: 12
-                                    color: "#f7efe3"
-                                    border.color: "#d8ccb8"
+                                    color: root.panelAltBg
+                                    border.color: root.panelBorder
 
                                     ColumnLayout {
                                         anchors.fill: parent
@@ -716,9 +975,9 @@ ApplicationWindow {
                                         TabBar {
                                             id: detailTabs
                                             Layout.fillWidth: true
-                                            TabButton { text: "Tool Calls (" + toolsInsideBrowser.toolCalls.length + ")" }
-                                            TabButton { text: "Support Links (" + toolsInsideBrowser.supportLinks.length + ")" }
-                                            TabButton { text: "Artifacts (" + toolsInsideBrowser.artifacts.length + ")" }
+                                            TabButton { text: root.uiText("Tool Calls", "工具调用") + " (" + toolsInsideBrowser.toolCalls.length + ")" }
+                                            TabButton { text: root.uiText("Support Links", "支撑关系") + " (" + toolsInsideBrowser.supportLinks.length + ")" }
+                                            TabButton { text: root.uiText("Artifacts", "工件") + " (" + toolsInsideBrowser.artifacts.length + ")" }
                                         }
 
                                         StackLayout {
@@ -756,7 +1015,7 @@ ApplicationWindow {
                                                             font.bold: true
                                                         }
                                                         Text {
-                                                            text: "Round " + modelData.roundIndex + " | " + modelData.requestId
+                                                            text: root.uiText("Round ", "轮次 ") + modelData.roundIndex + " | " + modelData.requestId
                                                             color: root.mutedText
                                                             elide: Text.ElideMiddle
                                                             width: parent.width
@@ -864,10 +1123,10 @@ ApplicationWindow {
 
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Label { text: "Inspector"; font.bold: true; color: root.headerText }
+                                            Label { text: root.uiText("Inspector", "检查器"); font.bold: true; color: root.headerText }
                                             Item { Layout.fillWidth: true }
                                             Button {
-                                                text: "Clear"
+                                                text: root.uiText("Clear", "清除")
                                                 onClicked: {
                                                     root.selectedTimelineKey = ""
                                                     root.selectedToolCallId = ""
@@ -882,7 +1141,7 @@ ApplicationWindow {
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: 132
                                             radius: 10
-                                            color: "#f4ecdf"
+                                            color: root.panelAltBg
                                             border.color: root.panelBorder
                                             GridLayout {
                                                 anchors.fill: parent
@@ -891,7 +1150,7 @@ ApplicationWindow {
                                                 rowSpacing: 4
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: toolsInsideBrowser.inspector.title || "No selection"
+                                                    text: toolsInsideBrowser.inspector.title || root.uiText("No selection", "未选择对象")
                                                     font.bold: true
                                                     font.pixelSize: Math.round(16 * root.uiScale)
                                                     color: root.headerText
@@ -907,14 +1166,14 @@ ApplicationWindow {
                                                 }
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: toolsInsideBrowser.inspector.summary || "Click a swimlane node, tool call, support link, or artifact."
+                                                    text: toolsInsideBrowser.inspector.summary || root.uiText("Click a swimlane node, tool call, support link, or artifact.", "点击泳道节点、工具调用、支撑关系或工件以查看详情。")
                                                     color: root.bodyText
                                                     wrapMode: Text.Wrap
                                                 }
                                             }
                                         }
 
-                                        Label { text: "Content"; font.bold: true; color: root.bodyText }
+                                        Label { text: root.uiText("Content", "内容"); font.bold: true; color: root.bodyText }
                                         ScrollView {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
@@ -952,8 +1211,8 @@ ApplicationWindow {
 
     footer: Rectangle {
         height: 38
-        color: "#e9e1d3"
-        border.color: "#d0c2ab"
+        color: root.headerBarBg
+        border.color: root.panelBorder
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 16
@@ -965,7 +1224,7 @@ ApplicationWindow {
                 verticalAlignment: Text.AlignVCenter
             }
             Text {
-                text: "Selected trace: " + (toolsInsideBrowser.selectedTraceId || "-")
+                text: root.uiText("Selected trace: ", "当前 Trace：") + (toolsInsideBrowser.selectedTraceId || "-")
                 color: root.bodyText
                 elide: Text.ElideMiddle
                 Layout.preferredWidth: 380
