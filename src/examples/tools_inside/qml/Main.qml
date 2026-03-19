@@ -433,7 +433,9 @@ ApplicationWindow {
             Button { text: root.uiText("Reload", "刷新"); onClicked: toolsInsideBrowser.reload() }
             Button { text: "-"; onClicked: root.zoomOut() }
             Button {
-                text: root.fitTimeline ? "Fit" : Math.round(root.manualPixelsPerTick) + "px/6ms"
+                text: root.fitTimeline
+                      ? root.uiText("Fit", "适配")
+                      : Math.round(root.manualPixelsPerTick) + root.uiText("px/6ms", "像素/6ms")
                 onClicked: root.resetZoom()
             }
             Button { text: "+"; onClicked: root.zoomIn() }
@@ -598,10 +600,10 @@ ApplicationWindow {
 
                         Repeater {
                             model: [
-                                { "title": "Lanes", "value": toolsInsideBrowser.traceSummary.laneCount || 0, "tone": "#e8dfd0" },
-                                { "title": "Tool Calls", "value": toolsInsideBrowser.toolCalls.length, "tone": "#dfece6" },
-                                { "title": "Support", "value": toolsInsideBrowser.supportLinks.length, "tone": "#e5ebf4" },
-                                { "title": "Artifacts", "value": toolsInsideBrowser.artifacts.length, "tone": "#f0e4d6" }
+                                { "title": root.uiText("Lanes", "泳道"), "value": toolsInsideBrowser.traceSummary.laneCount || 0, "tone": "#e8dfd0" },
+                                { "title": root.uiText("Tool Calls", "工具调用"), "value": toolsInsideBrowser.toolCalls.length, "tone": "#dfece6" },
+                                { "title": root.uiText("Support", "支撑"), "value": toolsInsideBrowser.supportLinks.length, "tone": "#e5ebf4" },
+                                { "title": root.uiText("Artifacts", "工件"), "value": toolsInsideBrowser.artifacts.length, "tone": "#f0e4d6" }
                             ]
                             delegate: Rectangle {
                                 Layout.preferredWidth: 124
@@ -920,9 +922,9 @@ ApplicationWindow {
                                                                 ToolTip.visible: entryMouse.containsMouse
                                                                 ToolTip.delay: 150
                                                                 ToolTip.text: modelData.label
-                                                                               + "\nStart: T+" + modelData.startMs + "ms"
-                                                                               + (entryItem.isSpan ? ("\nEnd: T+" + modelData.endMs + "ms") : "")
-                                                                               + (modelData.status ? ("\nStatus: " + modelData.status) : "")
+                                                                               + "\n" + root.uiText("Start", "开始") + ": T+" + modelData.startMs + "ms"
+                                                                               + (entryItem.isSpan ? ("\n" + root.uiText("End", "结束") + ": T+" + modelData.endMs + "ms") : "")
+                                                                               + (modelData.status ? ("\n" + root.uiText("Status", "状态") + ": " + modelData.status) : "")
                                                                                + (modelData.detail ? ("\n" + modelData.detail) : "")
                                                             }
                                                         }
