@@ -15,6 +15,7 @@ class ToolsInsideBrowser : public QObject
     Q_OBJECT
     Q_PROPERTY(QString workspaceRoot READ workspaceRoot WRITE setWorkspaceRoot NOTIFY workspaceRootChanged)
     Q_PROPERTY(QStringList workspaceHistory READ workspaceHistory NOTIFY workspaceHistoryChanged)
+    Q_PROPERTY(QStringList workspaceFavorites READ workspaceFavorites NOTIFY workspaceFavoritesChanged)
     Q_PROPERTY(QVariantList clients READ clients NOTIFY clientsChanged)
     Q_PROPERTY(QVariantList sessions READ sessions NOTIFY sessionsChanged)
     Q_PROPERTY(QVariantList traces READ traces NOTIFY tracesChanged)
@@ -37,6 +38,7 @@ public:
 
     QString workspaceRoot() const;
     QStringList workspaceHistory() const;
+    QStringList workspaceFavorites() const;
     void setWorkspaceRoot(const QString &workspaceRoot);
 
     QVariantList clients() const;
@@ -59,6 +61,10 @@ public:
     Q_INVOKABLE void reload();
     Q_INVOKABLE void chooseWorkspaceRoot();
     Q_INVOKABLE void selectWorkspaceHistory(const QString &workspaceRoot);
+    Q_INVOKABLE void toggleWorkspaceFavorite(const QString &workspaceRoot);
+    Q_INVOKABLE void removeWorkspaceFavorite(const QString &workspaceRoot);
+    Q_INVOKABLE void clearWorkspaceHistory();
+    Q_INVOKABLE bool isFavoriteWorkspace(const QString &workspaceRoot) const;
     Q_INVOKABLE void selectClient(const QString &clientId);
     Q_INVOKABLE void selectSession(const QString &sessionId);
     Q_INVOKABLE void selectTrace(const QString &traceId);
@@ -73,6 +79,7 @@ public:
 signals:
     void workspaceRootChanged();
     void workspaceHistoryChanged();
+    void workspaceFavoritesChanged();
     void clientsChanged();
     void sessionsChanged();
     void tracesChanged();
@@ -99,6 +106,7 @@ private:
     void loadWorkspacePreferences();
     void persistWorkspacePreferences() const;
     void rememberWorkspaceRoot(const QString &workspaceRoot);
+    QString normalizeWorkspaceRoot(const QString &workspaceRoot) const;
     void setStatusText(const QString &statusText);
     void setInspector(const QVariantMap &inspector);
     QVariantMap findArtifactById(const QString &artifactId) const;
@@ -108,9 +116,11 @@ private:
 private:
     static constexpr int kTimelineTickMs = 6;
     static constexpr int kMaxWorkspaceHistory = 12;
+    static constexpr int kMaxWorkspaceFavorites = 10;
 
     QString m_workspaceRoot;
     QStringList m_workspaceHistory;
+    QStringList m_workspaceFavorites;
     QVariantList m_clients;
     QVariantList m_sessions;
     QVariantList m_traces;
