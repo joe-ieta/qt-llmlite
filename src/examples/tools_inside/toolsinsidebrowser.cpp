@@ -1,7 +1,8 @@
-#include "toolsinsidebrowser.h"
+﻿#include "toolsinsidebrowser.h"
 
 #include "../../qtllm/toolsinside/toolsinsideadminservice.h"
 #include "../../qtllm/toolsinside/toolsinsideartifactstore.h"
+#include "../../qtllm/toolsinside/toolsinsidei18n.h"
 #include "../../qtllm/toolsinside/toolsinsidequeryservice.h"
 #include "../../qtllm/toolsinside/toolsinsideruntime.h"
 
@@ -335,7 +336,7 @@ void ToolsInsideBrowser::reload()
 void ToolsInsideBrowser::chooseWorkspaceRoot()
 {
     const QString directory = QFileDialog::getExistingDirectory(nullptr,
-                                                                QStringLiteral("Select tools_inside Workspace"),
+                                                                ti18n(u"Select tools_inside Workspace", u"选择 tools_inside 工作区"),
                                                                 m_workspaceRoot);
     if (!directory.trimmed().isEmpty()) {
         setWorkspaceRoot(directory);
@@ -359,13 +360,13 @@ void ToolsInsideBrowser::toggleWorkspaceFavorite(const QString &workspaceRoot)
     QStringList favorites = m_workspaceFavorites;
     if (favorites.contains(normalized)) {
         favorites.removeAll(normalized);
-        setStatusText(QStringLiteral("Workspace removed from favorites"));
+        setStatusText(ti18n(u"Workspace removed from favorites", u"已从常用目录中移除工作区"));
     } else {
         favorites.prepend(normalized);
         while (favorites.size() > kMaxWorkspaceFavorites) {
             favorites.removeLast();
         }
-        setStatusText(QStringLiteral("Workspace added to favorites"));
+        setStatusText(ti18n(u"Workspace added to favorites", u"已将工作区加入常用目录"));
     }
     favorites.removeDuplicates();
 
@@ -389,7 +390,7 @@ void ToolsInsideBrowser::removeWorkspaceFavorite(const QString &workspaceRoot)
         m_workspaceFavorites = favorites;
         emit workspaceFavoritesChanged();
         persistWorkspacePreferences();
-        setStatusText(QStringLiteral("Favorite removed"));
+        setStatusText(ti18n(u"Favorite removed", u"已移除常用目录"));
     }
 }
 
@@ -398,7 +399,7 @@ void ToolsInsideBrowser::clearWorkspaceHistory()
     m_workspaceHistory = QStringList{m_workspaceRoot};
     emit workspaceHistoryChanged();
     persistWorkspacePreferences();
-    setStatusText(QStringLiteral("Workspace history cleared"));
+    setStatusText(ti18n(u"Workspace history cleared", u"最近目录已清空"));
 }
 
 bool ToolsInsideBrowser::isFavoriteWorkspace(const QString &workspaceRoot) const
@@ -449,14 +450,14 @@ void ToolsInsideBrowser::selectTrace(const QString &traceId)
 bool ToolsInsideBrowser::archiveSelectedTrace()
 {
     if (m_selectedTraceId.isEmpty()) {
-        setStatusText(QStringLiteral("No trace selected"));
+        setStatusText(ti18n(u"No trace selected", u"未选择 Trace"));
         return false;
     }
 
     ensureRuntimeConfigured();
     QString errorMessage;
     const bool ok = ToolsInsideRuntime::instance().adminService()->archiveTrace(m_selectedTraceId, &errorMessage);
-    setStatusText(ok ? QStringLiteral("Trace archived") : errorMessage);
+    setStatusText(ok ? ti18n(u"Trace archived", u"Trace 已归档") : errorMessage);
     if (ok) {
         reloadTraces();
         reloadTraceDetail();
@@ -467,7 +468,7 @@ bool ToolsInsideBrowser::archiveSelectedTrace()
 bool ToolsInsideBrowser::purgeSelectedTrace()
 {
     if (m_selectedTraceId.isEmpty()) {
-        setStatusText(QStringLiteral("No trace selected"));
+        setStatusText(ti18n(u"No trace selected", u"未选择 Trace"));
         return false;
     }
 
@@ -475,7 +476,7 @@ bool ToolsInsideBrowser::purgeSelectedTrace()
     const QString traceId = m_selectedTraceId;
     QString errorMessage;
     const bool ok = ToolsInsideRuntime::instance().adminService()->purgeTrace(traceId, &errorMessage);
-    setStatusText(ok ? QStringLiteral("Trace purged") : errorMessage);
+    setStatusText(ok ? ti18n(u"Trace purged", u"Trace 已清除") : errorMessage);
     if (ok) {
         m_selectedTraceId.clear();
         emit selectedTraceIdChanged();
@@ -491,7 +492,8 @@ void ToolsInsideBrowser::inspectTimelineEntry(const QVariantMap &entry)
     QVariantMap inspector;
     inspector.insert(QStringLiteral("title"), entry.value(QStringLiteral("label")).toString());
     inspector.insert(QStringLiteral("kind"), QStringLiteral("timeline-entry"));
-    inspector.insert(QStringLiteral("summary"), QStringLiteral("Lane: %1\nStart: T+%2ms\nEnd: T+%3ms\nStatus: %4")
+    inspector.insert(QStringLiteral("summary"), ti18n(u"Lane: %1\nStart: T+%2ms\nEnd: T+%3ms\nStatus: %4",
+                                                      u"泳道：%1\n开始：T+%2ms\n结束：T+%3ms\n状态：%4")
                      .arg(entry.value(QStringLiteral("laneId")).toString(),
                           QString::number(entry.value(QStringLiteral("startMs")).toLongLong()),
                           QString::number(entry.value(QStringLiteral("endMs")).toLongLong()),
@@ -502,7 +504,7 @@ void ToolsInsideBrowser::inspectTimelineEntry(const QVariantMap &entry)
     if (!toolCallId.isEmpty()) {
         const QVariantMap toolCall = findToolCallById(toolCallId);
         if (!toolCall.isEmpty()) {
-            sections.append(QStringLiteral("Related Tool Call\n%1").arg(toolCall.value(QStringLiteral("summaryJson")).toString()));
+            sections.append(ti18n(u"Related Tool Call\n%1", u"关联工具调用\n%1").arg(toolCall.value(QStringLiteral("summaryJson")).toString()));
         }
     }
     inspector.insert(QStringLiteral("content"), joinSections(sections));
@@ -516,25 +518,26 @@ void ToolsInsideBrowser::inspectToolCall(const QVariantMap &toolCall)
     QVariantMap inspector;
     inspector.insert(QStringLiteral("title"), toolCall.value(QStringLiteral("toolId")).toString());
     inspector.insert(QStringLiteral("kind"), QStringLiteral("tool-call"));
-    inspector.insert(QStringLiteral("summary"), QStringLiteral("Call: %1\nStatus: %2\nRound: %3\nDuration: %4 ms\nRequest: %5")
+    inspector.insert(QStringLiteral("summary"), ti18n(u"Call: %1\nStatus: %2\nRound: %3\nDuration: %4 ms\nRequest: %5",
+                                                      u"调用：%1\n状态：%2\n轮次：%3\n耗时：%4 ms\n请求：%5")
                      .arg(toolCall.value(QStringLiteral("toolCallId")).toString(),
                           toolCall.value(QStringLiteral("status")).toString(),
                           QString::number(toolCall.value(QStringLiteral("roundIndex")).toInt()),
                           QString::number(toolCall.value(QStringLiteral("durationMs")).toLongLong()),
                           toolCall.value(QStringLiteral("requestId")).toString()));
     QStringList sections;
-    sections.append(QStringLiteral("Tool Summary\n%1").arg(toolCall.value(QStringLiteral("summaryJson")).toString()));
+    sections.append(ti18n(u"Tool Summary\n%1", u"工具摘要\n%1").arg(toolCall.value(QStringLiteral("summaryJson")).toString()));
     const QVariantMap argsArtifact = findArtifactById(toolCall.value(QStringLiteral("argumentsArtifactId")).toString());
     const QVariantMap outputArtifact = findArtifactById(toolCall.value(QStringLiteral("outputArtifactId")).toString());
     const QVariantMap followupArtifact = findArtifactById(toolCall.value(QStringLiteral("followupArtifactId")).toString());
     if (!argsArtifact.isEmpty()) {
-        sections.append(QStringLiteral("Arguments Artifact\n%1").arg(loadArtifactContent(argsArtifact)));
+        sections.append(ti18n(u"Arguments Artifact\n%1", u"参数工件\n%1").arg(loadArtifactContent(argsArtifact)));
     }
     if (!outputArtifact.isEmpty()) {
-        sections.append(QStringLiteral("Output Artifact\n%1").arg(loadArtifactContent(outputArtifact)));
+        sections.append(ti18n(u"Output Artifact\n%1", u"输出工件\n%1").arg(loadArtifactContent(outputArtifact)));
     }
     if (!followupArtifact.isEmpty()) {
-        sections.append(QStringLiteral("Follow-up Prompt Artifact\n%1").arg(loadArtifactContent(followupArtifact)));
+        sections.append(ti18n(u"Follow-up Prompt Artifact\n%1", u"后续提示词工件\n%1").arg(loadArtifactContent(followupArtifact)));
     }
     inspector.insert(QStringLiteral("content"), joinSections(sections));
     inspector.insert(QStringLiteral("sourceId"), toolCall.value(QStringLiteral("toolCallId")).toString());
@@ -547,20 +550,21 @@ void ToolsInsideBrowser::inspectSupportLink(const QVariantMap &supportLink)
     QVariantMap inspector;
     inspector.insert(QStringLiteral("title"), supportLink.value(QStringLiteral("supportType")).toString());
     inspector.insert(QStringLiteral("kind"), QStringLiteral("support-link"));
-    inspector.insert(QStringLiteral("summary"), QStringLiteral("Tool Call: %1\nTarget: %2\nSource: %3\nConfidence: %4")
+    inspector.insert(QStringLiteral("summary"), ti18n(u"Tool Call: %1\nTarget: %2\nSource: %3\nConfidence: %4",
+                                                      u"工具调用：%1\n目标：%2\n来源：%3\n置信度：%4")
                      .arg(supportLink.value(QStringLiteral("toolCallId")).toString(),
                           supportLink.value(QStringLiteral("targetId")).toString(),
                           supportLink.value(QStringLiteral("source")).toString(),
                           QString::number(supportLink.value(QStringLiteral("confidence")).toDouble(), 'f', 2)));
     QStringList sections;
-    sections.append(QStringLiteral("Support Metadata\n%1").arg(supportLink.value(QStringLiteral("metadataJson")).toString()));
+    sections.append(ti18n(u"Support Metadata\n%1", u"支撑元数据\n%1").arg(supportLink.value(QStringLiteral("metadataJson")).toString()));
     const QVariantMap evidenceArtifact = findArtifactById(supportLink.value(QStringLiteral("evidenceArtifactId")).toString());
     if (!evidenceArtifact.isEmpty()) {
-        sections.append(QStringLiteral("Evidence Artifact\n%1").arg(loadArtifactContent(evidenceArtifact)));
+        sections.append(ti18n(u"Evidence Artifact\n%1", u"证据工件\n%1").arg(loadArtifactContent(evidenceArtifact)));
     }
     const QVariantMap toolCall = findToolCallById(supportLink.value(QStringLiteral("toolCallId")).toString());
     if (!toolCall.isEmpty()) {
-        sections.append(QStringLiteral("Related Tool Call\n%1").arg(toolCall.value(QStringLiteral("summaryJson")).toString()));
+        sections.append(ti18n(u"Related Tool Call\n%1", u"关联工具调用\n%1").arg(toolCall.value(QStringLiteral("summaryJson")).toString()));
     }
     inspector.insert(QStringLiteral("content"), joinSections(sections));
     inspector.insert(QStringLiteral("sourceId"), supportLink.value(QStringLiteral("supportLinkId")).toString());
@@ -573,7 +577,8 @@ void ToolsInsideBrowser::inspectArtifact(const QVariantMap &artifact)
     QVariantMap inspector;
     inspector.insert(QStringLiteral("title"), artifact.value(QStringLiteral("kind")).toString());
     inspector.insert(QStringLiteral("kind"), QStringLiteral("artifact"));
-    inspector.insert(QStringLiteral("summary"), QStringLiteral("Artifact: %1\nMIME: %2\nSize: %3 bytes\nPath: %4")
+    inspector.insert(QStringLiteral("summary"), ti18n(u"Artifact: %1\nMIME: %2\nSize: %3 bytes\nPath: %4",
+                                                      u"工件：%1\nMIME：%2\n大小：%3 字节\n路径：%4")
                      .arg(artifact.value(QStringLiteral("artifactId")).toString(),
                           artifact.value(QStringLiteral("mimeType")).toString(),
                           QString::number(artifact.value(QStringLiteral("sizeBytes")).toLongLong()),
@@ -718,28 +723,28 @@ void ToolsInsideBrowser::reloadTraceDetail()
 
         QString laneId = QStringLiteral("trace");
         QString laneKind = QStringLiteral("trace");
-        QString laneTitle = QStringLiteral("Trace Lifecycle");
+        QString laneTitle = ti18n(u"Trace Lifecycle", u"Trace 生命周期");
         QString laneSubtitle = trace->traceId;
         int laneOrder = 0;
 
         if (span.kind == QStringLiteral("llm_request")) {
             laneId = QStringLiteral("request:") + span.requestId;
             laneKind = QStringLiteral("request");
-            laneTitle = QStringLiteral("Request ") + shortId(span.requestId);
+            laneTitle = ti18n(u"Request ", u"请求 ") + shortId(span.requestId);
             laneSubtitle = span.name;
             laneOrder = 100;
         } else if (span.kind == QStringLiteral("tool_batch")) {
             const int roundIndex = span.summary.value(QStringLiteral("roundIndex")).toInt();
             laneId = QStringLiteral("batch:") + span.requestId + QStringLiteral(":") + QString::number(roundIndex);
             laneKind = QStringLiteral("batch");
-            laneTitle = QStringLiteral("Tool Batch R%1").arg(roundIndex);
-            laneSubtitle = QStringLiteral("Request ") + shortId(span.requestId);
+            laneTitle = ti18n(u"Tool Batch R%1", u"工具批次 R%1").arg(roundIndex);
+            laneSubtitle = ti18n(u"Request ", u"请求 ") + shortId(span.requestId);
             laneOrder = 200 + roundIndex;
         } else if (span.kind == QStringLiteral("tool_call")) {
             laneId = QStringLiteral("tool:") + span.toolCallId;
             laneKind = QStringLiteral("tool");
-            laneTitle = span.name.isEmpty() ? QStringLiteral("Tool ") + shortId(span.toolCallId) : span.name;
-            laneSubtitle = QStringLiteral("Call ") + shortId(span.toolCallId);
+            laneTitle = span.name.isEmpty() ? ti18n(u"Tool ", u"工具 ") + shortId(span.toolCallId) : span.name;
+            laneSubtitle = ti18n(u"Call ", u"调用 ") + shortId(span.toolCallId);
             laneOrder = 300;
         }
 
@@ -770,27 +775,27 @@ void ToolsInsideBrowser::reloadTraceDetail()
 
         QString laneId = QStringLiteral("trace");
         QString laneKind = QStringLiteral("trace");
-        QString laneTitle = QStringLiteral("Trace Lifecycle");
+        QString laneTitle = ti18n(u"Trace Lifecycle", u"Trace 生命周期");
         QString laneSubtitle = trace->traceId;
         int laneOrder = 0;
 
         if (!event.toolCallId.isEmpty()) {
             laneId = QStringLiteral("tool:") + event.toolCallId;
             laneKind = QStringLiteral("tool");
-            laneTitle = QStringLiteral("Tool ") + shortId(event.toolCallId);
+            laneTitle = ti18n(u"Tool ", u"工具 ") + shortId(event.toolCallId);
             laneSubtitle = event.category;
             laneOrder = 300;
         } else if (event.category == QStringLiteral("tool.loop") && !event.requestId.isEmpty()) {
             const int roundIndex = event.payload.value(QStringLiteral("roundIndex")).toInt();
             laneId = QStringLiteral("batch:") + event.requestId + QStringLiteral(":") + QString::number(roundIndex);
             laneKind = QStringLiteral("batch");
-            laneTitle = QStringLiteral("Tool Batch R%1").arg(roundIndex);
+            laneTitle = ti18n(u"Tool Batch R%1", u"工具批次 R%1").arg(roundIndex);
             laneSubtitle = event.category;
             laneOrder = 200 + roundIndex;
         } else if (event.category.startsWith(QStringLiteral("llm.")) || !event.requestId.isEmpty()) {
             laneId = QStringLiteral("request:") + event.requestId;
             laneKind = QStringLiteral("request");
-            laneTitle = QStringLiteral("Request ") + shortId(event.requestId);
+            laneTitle = ti18n(u"Request ", u"请求 ") + shortId(event.requestId);
             laneSubtitle = event.category;
             laneOrder = 100;
         }
@@ -877,9 +882,10 @@ void ToolsInsideBrowser::reloadTraceDetail()
     emit timelineLanesChanged();
     emit timelineDurationChanged();
 
-    setInspector(QVariantMap{{QStringLiteral("title"), QStringLiteral("Trace Overview")},
+    setInspector(QVariantMap{{QStringLiteral("title"), ti18n(u"Trace Overview", u"Trace 总览")},
                              {QStringLiteral("kind"), QStringLiteral("trace")},
-                             {QStringLiteral("summary"), QStringLiteral("Trace: %1\nStatus: %2\nT0: %3\nDuration: %4 ms\nLanes: %5")
+                             {QStringLiteral("summary"), ti18n(u"Trace: %1\nStatus: %2\nT0: %3\nDuration: %4 ms\nLanes: %5",
+                                                               u"Trace：%1\n状态：%2\nT0：%3\n时长：%4 ms\n泳道数：%5")
                               .arg(trace->traceId, trace->status, toIso(baseUtc), QString::number(m_timelineDurationMs), QString::number(m_timelineLanes.size()))},
                              {QStringLiteral("content"), m_traceSummary.value(QStringLiteral("summaryJson")).toString()},
                              {QStringLiteral("sourceId"), trace->traceId},
@@ -888,7 +894,7 @@ void ToolsInsideBrowser::reloadTraceDetail()
     if (!errorMessage.isEmpty()) {
         setStatusText(errorMessage);
     } else {
-        setStatusText(QStringLiteral("Loaded trace detail with millisecond swimlanes"));
+        setStatusText(ti18n(u"Loaded trace detail with millisecond swimlanes", u"已加载带毫秒泳道的 Trace 详情"));
     }
 }
 
@@ -1036,12 +1042,12 @@ QString ToolsInsideBrowser::loadArtifactContent(const QVariantMap &artifact) con
     }
     const auto store = ToolsInsideRuntime::instance().artifactStore();
     if (!store) {
-        return QStringLiteral("Artifact store unavailable");
+        return ti18n(u"Artifact store unavailable", u"工件存储不可用");
     }
     const QString absolutePath = store->absolutePathForRelativePath(relativePath);
     QFile file(absolutePath);
     if (!file.open(QIODevice::ReadOnly)) {
-        return QStringLiteral("Failed to open artifact: ") + absolutePath;
+        return ti18n(u"Failed to open artifact: ", u"打开工件失败：") + absolutePath;
     }
     const QByteArray bytes = file.read(262144);
     const bool truncated = !file.atEnd();
@@ -1058,10 +1064,11 @@ QString ToolsInsideBrowser::loadArtifactContent(const QVariantMap &artifact) con
             textPreview = maybeJson;
         }
     } else {
-        textPreview = QStringLiteral("Binary artifact preview is not enabled in current build.\nPath: ") + absolutePath;
+        textPreview = ti18n(u"Binary artifact preview is not enabled in current build.\nPath: ",
+                            u"当前构建未启用二进制工件预览。\n路径：") + absolutePath;
     }
     if (truncated) {
-        textPreview += QStringLiteral("\n\n[preview truncated at 256 KiB]");
+        textPreview += ti18n(u"\n\n[preview truncated at 256 KiB]", u"\n\n[预览已在 256 KiB 处截断]");
     }
     return textPreview;
 }

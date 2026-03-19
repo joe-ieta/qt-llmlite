@@ -1,4 +1,5 @@
-#include "toolsinsideartifactstore.h"
+﻿#include "toolsinsideartifactstore.h"
+#include "toolsinsidei18n.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -63,7 +64,7 @@ ToolsInsideArtifactRef ToolsInsideArtifactStore::writeArtifact(const QString &cl
 
     if (artifact.clientId.isEmpty() || artifact.sessionId.isEmpty() || artifact.traceId.isEmpty() || artifact.kind.isEmpty()) {
         if (errorMessage) {
-            *errorMessage = QStringLiteral("Artifact identifiers are incomplete");
+            *errorMessage = ti18n(u"Artifact identifiers are incomplete", u"工件标识信息不完整");
         }
         artifact.artifactId.clear();
         return artifact;
@@ -86,7 +87,7 @@ ToolsInsideArtifactRef ToolsInsideArtifactStore::writeArtifact(const QString &cl
     QSaveFile file(QDir(m_rootDirectory).filePath(artifact.relativePath));
     if (!file.open(QIODevice::WriteOnly)) {
         if (errorMessage) {
-            *errorMessage = QStringLiteral("Failed to open artifact for writing: ") + file.errorString();
+            *errorMessage = ti18n(u"Failed to open artifact for writing: ", u"打开工件写入失败：") + file.errorString();
         }
         artifact.artifactId.clear();
         artifact.relativePath.clear();
@@ -95,7 +96,7 @@ ToolsInsideArtifactRef ToolsInsideArtifactStore::writeArtifact(const QString &cl
 
     if (file.write(persisted) != persisted.size()) {
         if (errorMessage) {
-            *errorMessage = QStringLiteral("Failed to write artifact: ") + file.errorString();
+            *errorMessage = ti18n(u"Failed to write artifact: ", u"写入工件失败：") + file.errorString();
         }
         artifact.artifactId.clear();
         artifact.relativePath.clear();
@@ -104,7 +105,7 @@ ToolsInsideArtifactRef ToolsInsideArtifactStore::writeArtifact(const QString &cl
 
     if (!file.commit()) {
         if (errorMessage) {
-            *errorMessage = QStringLiteral("Failed to commit artifact: ") + file.errorString();
+            *errorMessage = ti18n(u"Failed to commit artifact: ", u"提交工件失败：") + file.errorString();
         }
         artifact.artifactId.clear();
         artifact.relativePath.clear();
@@ -149,7 +150,7 @@ bool ToolsInsideArtifactStore::ensureTraceDirectory(const QString &clientId,
     }
 
     if (errorMessage) {
-        *errorMessage = QStringLiteral("Failed to create artifact directory: ") + root.filePath(relativeDirectory);
+        *errorMessage = ti18n(u"Failed to create artifact directory: ", u"创建工件目录失败：") + root.filePath(relativeDirectory);
     }
     return false;
 }
