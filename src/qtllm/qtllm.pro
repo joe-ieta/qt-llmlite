@@ -25,7 +25,8 @@ INCLUDEPATH += \
     $$PWD/tools/protocol \
     $$PWD/tools/mcp \
     $$PWD/logging \
-    $$PWD/toolsinside
+    $$PWD/toolsinside \
+    $$PWD/toolsstudio
 
 HEADERS += \
     core/llmconfig.h \
@@ -70,6 +71,14 @@ HEADERS += \
     tools/mcp/defaultmcpclient.h \
     tools/mcp/mcptoolsyncservice.h \
     tools/mcp/mcpservermanager.h \
+    toolsstudio/toolsstudio_types.h \
+    toolsstudio/toolcatalogservice.h \
+    toolsstudio/toolmetadataoverriderepository.h \
+    toolsstudio/toolimportexportservice.h \
+    toolsstudio/toolmergeservice.h \
+    toolsstudio/toolworkspacerepository.h \
+    toolsstudio/toolworkspaceservice.h \
+    toolsstudio/toolstudiosettings.h \
     toolsinside/toolsinside_types.h \
     toolsinside/toolsinsideartifactstore.h \
     toolsinside/toolsinsiderepository.h \
@@ -113,6 +122,13 @@ SOURCES += \
     tools/mcp/defaultmcpclient.cpp \
     tools/mcp/mcptoolsyncservice.cpp \
     tools/mcp/mcpservermanager.cpp \
+    toolsstudio/toolcatalogservice.cpp \
+    toolsstudio/toolmetadataoverriderepository.cpp \
+    toolsstudio/toolimportexportservice.cpp \
+    toolsstudio/toolmergeservice.cpp \
+    toolsstudio/toolworkspacerepository.cpp \
+    toolsstudio/toolworkspaceservice.cpp \
+    toolsstudio/toolstudiosettings.cpp \
     toolsinside/toolsinsideartifactstore.cpp \
     toolsinside/toolsinsiderepository.cpp \
     toolsinside/toolsinsidequeryservice.cpp \
