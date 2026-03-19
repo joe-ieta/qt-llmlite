@@ -28,7 +28,7 @@ public:
     bool setProviderByName(const QString &providerName);
 
     void setToolCallOrchestrator(const std::shared_ptr<tools::runtime::ToolCallOrchestrator> &orchestrator);
-    void setToolLoopContext(const QString &clientId, const QString &sessionId);
+    void setToolLoopContext(const QString &clientId, const QString &sessionId, const QString &traceId = QString());
 
     void sendPrompt(const QString &prompt);
     void sendRequest(const LlmRequest &request);
@@ -58,6 +58,7 @@ private:
     std::shared_ptr<tools::runtime::ToolCallOrchestrator> m_toolOrchestrator;
     QString m_toolLoopClientId;
     QString m_toolLoopSessionId;
+    QString m_toolLoopTraceId;
 };
 
 } // namespace qtllm

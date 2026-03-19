@@ -1,7 +1,7 @@
 TEMPLATE = app
-TARGET = simple_chat
+TARGET = tools_inside
 CONFIG += c++17 warn_on link_prl
-QT += core gui widgets network sql
+QT += core gui quick quickcontrols2 sql network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -10,14 +10,23 @@ INCLUDEPATH += \
     ../../qtllm/core \
     ../../qtllm/providers \
     ../../qtllm/network \
-    ../../qtllm/streaming
+    ../../qtllm/streaming \
+    ../../qtllm/chat \
+    ../../qtllm/storage \
+    ../../qtllm/profile \
+    ../../qtllm/tools \
+    ../../qtllm/tools/runtime \
+    ../../qtllm/toolsinside
 
 HEADERS += \
-    chatwindow.h
+    toolsinsidebrowser.h
 
 SOURCES += \
     main.cpp \
-    chatwindow.cpp
+    toolsinsidebrowser.cpp
+
+RESOURCES += \
+    qml.qrc
 
 QTLLM_LIB_DIR = $$clean_path($$OUT_PWD/../../qtllm/lib)
 CONFIG(debug, debug|release): QTLLM_LIB_DIR = $$clean_path($$QTLLM_LIB_DIR/debug)

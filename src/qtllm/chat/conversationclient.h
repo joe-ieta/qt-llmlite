@@ -48,7 +48,9 @@ public:
     void clearHistory();
 
     void sendUserMessage(const QString &content);
-    void sendUserMessageWithTools(const QString &content, const QJsonArray &tools);
+    void sendUserMessageWithTools(const QString &content,
+                                  const QJsonArray &tools,
+                                  const QString &traceId = QString());
 
     ConversationSnapshot snapshot() const;
     void restoreFromSnapshot(const ConversationSnapshot &snapshot);

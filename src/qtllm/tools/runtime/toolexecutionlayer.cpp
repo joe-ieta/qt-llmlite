@@ -5,6 +5,8 @@
 #include "../mcp/defaultmcpclient.h"
 #include "../mcp/mcpserverregistry.h"
 #include "../../logging/qtllmlogger.h"
+#include "../../toolsinside/toolsinsideruntime.h"
+#include "../../toolsinside/toolsinsidetracerecorder.h"
 
 #include <QElapsedTimer>
 #include <QJsonObject>
@@ -124,10 +126,33 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
                                                       const ClientToolPolicy &clientPolicy) const
 {
     const QString resolvedToolId = resolveToolId(request.toolId);
+    const int roundIndex = context.extra.value(QStringLiteral("toolLoopRoundIndex")).toInt();
 
     ToolExecutionResult result;
     result.callId = request.callId;
     result.toolId = resolvedToolId;
+
+    ToolCallRequest resolvedRequest = request;
+    resolvedRequest.toolId = resolvedToolId;
+    toolsinside::ToolsInsideRuntime::instance().recorder()->recordToolCallStarted(context,
+                                                                                  context.requestId,
+                                                                                  roundIndex,
+                                                                                  resolvedRequest);
+
+    auto finalizeResult = [&](ToolExecutionResult out) {
+        if (out.callId.isEmpty()) {
+            out.callId = resolvedRequest.callId;
+        }
+        if (out.toolId.isEmpty()) {
+            out.toolId = resolvedRequest.toolId;
+        }
+        toolsinside::ToolsInsideRuntime::instance().recorder()->recordToolCallFinished(context,
+                                                                                       context.requestId,
+                                                                                       roundIndex,
+                                                                                       resolvedRequest,
+                                                                                       out);
+        return out;
+    };
 
     if (!m_policy.isToolAllowed(resolvedToolId, clientPolicy)) {
         result.errorCode = QStringLiteral("tool_denied");
@@ -137,7 +162,7 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
                                               logContextFromExecution(context),
                                               QJsonObject{{QStringLiteral("toolId"), resolvedToolId},
                                                           {QStringLiteral("callId"), request.callId}});
-        return result;
+        return finalizeResult(result);
     }
 
     if (m_dryRunFailureMode) {
@@ -149,14 +174,11 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
                                               logContextFromExecution(context),
                                               QJsonObject{{QStringLiteral("toolId"), resolvedToolId},
                                                           {QStringLiteral("callId"), request.callId}});
-        return result;
+        return finalizeResult(result);
     }
 
-    ToolCallRequest resolvedRequest = request;
-    resolvedRequest.toolId = resolvedToolId;
-
     if (resolvedRequest.toolId.startsWith(QStringLiteral("mcp::"))) {
-        return executeMcpTool(resolvedRequest, context);
+        return finalizeResult(executeMcpTool(resolvedRequest, context));
     }
 
     if (!m_registry) {
@@ -165,7 +187,7 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
         logging::QtLlmLogger::instance().error(QStringLiteral("tool.execution"),
                                                QStringLiteral("Tool execution failed because executor registry is missing"),
                                                logContextFromExecution(context));
-        return result;
+        return finalizeResult(result);
     }
 
     const std::shared_ptr<IToolExecutor> executor = m_registry->find(resolvedRequest.toolId);
@@ -178,7 +200,7 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
                                                   QStringLiteral("External tool execution path is not implemented"),
                                                   logContextFromExecution(context),
                                                   QJsonObject{{QStringLiteral("toolId"), resolvedRequest.toolId}});
-            return result;
+            return finalizeResult(result);
         }
 
         result.errorCode = QStringLiteral("executor_missing");
@@ -187,7 +209,7 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
                                                QStringLiteral("Built-in tool executor is missing"),
                                                logContextFromExecution(context),
                                                QJsonObject{{QStringLiteral("toolId"), resolvedRequest.toolId}});
-        return result;
+        return finalizeResult(result);
     }
 
     if (m_hooks) {
@@ -220,7 +242,7 @@ ToolExecutionResult ToolExecutionLayer::executeSingle(const ToolCallRequest &req
         m_hooks->afterExecute(executed, context);
     }
 
-    return executed;
+    return finalizeResult(executed);
 }
 
 ToolExecutionResult ToolExecutionLayer::executeMcpTool(const ToolCallRequest &request,

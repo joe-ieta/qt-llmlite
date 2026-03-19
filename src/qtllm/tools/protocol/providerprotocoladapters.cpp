@@ -84,8 +84,13 @@ QString buildEmptyToolResultPrompt(const QString &assistantText,
         QJsonObject item;
         item.insert(QStringLiteral("call_id"), result.callId);
         item.insert(QStringLiteral("tool"), result.toolId);
-        item.insert(QStringLiteral("content"), QStringLiteral(""));
+        const QString content = result.success
+            ? QString::fromUtf8(QJsonDocument(result.output).toJson(QJsonDocument::Compact))
+            : result.errorMessage;
+        item.insert(QStringLiteral("content"), content);
+        item.insert(QStringLiteral("output"), content);
         item.insert(QStringLiteral("success"), result.success);
+        item.insert(QStringLiteral("error_code"), result.errorCode);
         array.append(item);
     }
 

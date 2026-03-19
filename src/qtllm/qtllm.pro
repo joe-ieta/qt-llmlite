@@ -1,7 +1,7 @@
 TEMPLATE = lib
 TARGET = qtllm
-CONFIG += c++17 warn_on staticlib
-QT += core network
+CONFIG += c++17 warn_on staticlib create_prl
+QT += core network sql
 
 DEFINES += QTLLM_LIBRARY
 
@@ -24,7 +24,8 @@ INCLUDEPATH += \
     $$PWD/tools/runtime \
     $$PWD/tools/protocol \
     $$PWD/tools/mcp \
-    $$PWD/logging
+    $$PWD/logging \
+    $$PWD/toolsinside
 
 HEADERS += \
     core/llmconfig.h \
@@ -69,6 +70,13 @@ HEADERS += \
     tools/mcp/defaultmcpclient.h \
     tools/mcp/mcptoolsyncservice.h \
     tools/mcp/mcpservermanager.h \
+    toolsinside/toolsinside_types.h \
+    toolsinside/toolsinsideartifactstore.h \
+    toolsinside/toolsinsiderepository.h \
+    toolsinside/toolsinsidequeryservice.h \
+    toolsinside/toolsinsideadminservice.h \
+    toolsinside/toolsinsidetracerecorder.h \
+    toolsinside/toolsinsideruntime.h \
     logging/logtypes.h \
     logging/ilogsink.h \
     logging/filelogsink.h \
@@ -105,6 +113,12 @@ SOURCES += \
     tools/mcp/defaultmcpclient.cpp \
     tools/mcp/mcptoolsyncservice.cpp \
     tools/mcp/mcpservermanager.cpp \
+    toolsinside/toolsinsideartifactstore.cpp \
+    toolsinside/toolsinsiderepository.cpp \
+    toolsinside/toolsinsidequeryservice.cpp \
+    toolsinside/toolsinsideadminservice.cpp \
+    toolsinside/toolsinsidetracerecorder.cpp \
+    toolsinside/toolsinsideruntime.cpp \
     logging/logtypes.cpp \
     logging/filelogsink.cpp \
     logging/signallogsink.cpp \

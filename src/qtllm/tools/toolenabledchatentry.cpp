@@ -1,10 +1,13 @@
 #include "toolenabledchatentry.h"
 
 #include "../logging/qtllmlogger.h"
+#include "../toolsinside/toolsinsideruntime.h"
+#include "../toolsinside/toolsinsidetracerecorder.h"
 
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QUuid>
 #include <optional>
 
 namespace qtllm::tools {
@@ -80,10 +83,23 @@ void ToolEnabledChatEntry::sendUserMessage(const QString &content)
         m_orchestrator->resetSession(m_client->uid(), m_client->activeSessionId());
     }
 
+    m_requestId.clear();
+    m_traceId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    toolsinside::ToolsInsideRuntime::instance().recorder()->startTrace(m_client->uid(),
+                                                                       m_client->activeSessionId(),
+                                                                       m_traceId,
+                                                                       trimmed,
+                                                                       m_client->config().providerName,
+                                                                       m_client->config().model,
+                                                                       m_client->config().modelVendor);
+
     QStringList selectedToolIds;
     const QJsonArray tools = selectAndAdaptToolsForTurn(trimmed, &selectedToolIds);
+    const QString toolSchemaText = QString::fromUtf8(QJsonDocument(tools).toJson(QJsonDocument::Indented));
     emit toolSelectionPrepared(selectedToolIds);
-    emit toolSchemaPrepared(QString::fromUtf8(QJsonDocument(tools).toJson(QJsonDocument::Indented)));
+    emit toolSchemaPrepared(toolSchemaText);
+    toolsinside::ToolsInsideRuntime::instance().recorder()->recordToolSelection(m_traceId, selectedToolIds, toolSchemaText);
 
     logging::QtLlmLogger::instance().info(QStringLiteral("tool.selection"),
                                           QStringLiteral("Prepared tools for user turn"),
@@ -91,7 +107,7 @@ void ToolEnabledChatEntry::sendUserMessage(const QString &content)
                                           QJsonObject{{QStringLiteral("selectedCount"), selectedToolIds.size()},
                                                       {QStringLiteral("toolSchemaCount"), tools.size()},
                                                       {QStringLiteral("inputLength"), trimmed.size()}});
-    m_client->sendUserMessageWithTools(trimmed, tools);
+    m_client->sendUserMessageWithTools(trimmed, tools, m_traceId);
 }
 
 void ToolEnabledChatEntry::setToolSelectionLayer(ToolSelectionLayer selectionLayer)
