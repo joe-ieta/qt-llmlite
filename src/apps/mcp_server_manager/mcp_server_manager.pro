@@ -1,5 +1,5 @@
 TEMPLATE = app
-TARGET = mcp_server_manager_demo
+TARGET = mcp_server_manager
 CONFIG += c++17 warn_on link_prl
 QT += core gui widgets network sql
 

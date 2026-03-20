@@ -4,16 +4,16 @@ CONFIG += ordered
 SUBDIRS += \
     src/qtllm \
     tests/qtllm_tests \
-    src/examples/simple_chat \
-    src/examples/multi_client_chat \
-    src/examples/mcp_server_manager_demo \
-    src/examples/tools_inside \
-    src/examples/toolstudio
+    src/apps/simple_chat \
+    src/apps/multi_client_chat \
+    src/apps/mcp_server_manager \
+    src/apps/tools_inside \
+    src/apps/toolstudio
 
 tests/qtllm_tests.depends = src/qtllm
-src/examples/simple_chat.depends = src/qtllm
-src/examples/multi_client_chat.depends = src/qtllm
-src/examples/mcp_server_manager_demo.depends = src/qtllm
+src/apps/simple_chat.depends = src/qtllm
+src/apps/multi_client_chat.depends = src/qtllm
+src/apps/mcp_server_manager.depends = src/qtllm
 
-src/examples/tools_inside.depends = src/qtllm
-src/examples/toolstudio.depends = src/qtllm
+src/apps/tools_inside.depends = src/qtllm
+src/apps/toolstudio.depends = src/qtllm
