@@ -26,6 +26,7 @@ To reduce ambiguity from older documents, this repository now uses one naming co
 4. [docs/REPOSITORY_STRUCTURE.md](./docs/REPOSITORY_STRUCTURE.md)
 5. [docs/DELIVERY_INTEGRATION.md](./docs/DELIVERY_INTEGRATION.md)
 6. [docs/TESTING_BASELINE.md](./docs/TESTING_BASELINE.md)
+7. [docs/developer-guide/README.md](./docs/developer-guide/README.md)
 
 ## Architecture Snapshot
 

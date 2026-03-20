@@ -185,7 +185,7 @@ McpChatWindow::McpChatWindow(std::shared_ptr<qtllm::tools::mcp::McpServerManager
     , m_runtimeLog(new QTextEdit(this))
 {
     setAttribute(Qt::WA_DeleteOnClose, true);
-    setWindowTitle(QStringLiteral("MCP Tool Chat Demo"));
+    setWindowTitle(QStringLiteral("MCP Tools Enabled Chat"));
     resize(1680, 1080);
 
     qtllm::logging::QtLlmLogger::instance().addSink(m_logSink);

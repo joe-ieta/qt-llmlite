@@ -51,6 +51,8 @@
 - `docs/TESTING_BASELINE.md`
 - `docs/ROADMAP.md`
 - `docs/DECISIONS.md`
+- `docs/developer-guide/`
+  - 面向 `qtllm` API 使用者的开发手册
 - `docs/releases/`
 - `docs/i18n/`
   - retained as translation mirrors, no longer the primary entry point
