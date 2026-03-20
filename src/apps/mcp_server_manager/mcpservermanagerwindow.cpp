@@ -208,7 +208,7 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     auto *toolsPane = new QWidget(this);
     toolsPane->setLayout(toolsLayout);
 
-    m_mainTabs->addTab(toolsPane, QStringLiteral("Tools"));
+    m_mainTabs->addTab(toolsPane, QStringLiteral("Selected Server"));
     m_mainTabs->addTab(m_logView, QStringLiteral("Logs"));
 
     auto *mainSplitter = new QSplitter(Qt::Horizontal, this);
