@@ -115,7 +115,8 @@ private:
     QTextEdit *m_promptDetailView;
     QTextEdit *m_logView;
     QPushButton *m_refreshDetailsButton;
-    QTabWidget *m_detailTabs;
+    QTabWidget *m_capabilityTabs;
+    QTabWidget *m_mainTabs;
 
     QString m_selectedServerId;
     QPointer<McpChatWindow> m_chatWindow;
