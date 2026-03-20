@@ -19,12 +19,18 @@ INCLUDEPATH += \
     ../../qtllm/tools/mcp
 
 HEADERS += \
+    manualmcpserverdialog.h \
     mcpchatwindow.h \
+    mcpscanlocationrepository.h \
+    mcpserverdiscoveryservice.h \
     mcpservermanagerwindow.h
 
 SOURCES += \
     main.cpp \
+    manualmcpserverdialog.cpp \
     mcpchatwindow.cpp \
+    mcpscanlocationrepository.cpp \
+    mcpserverdiscoveryservice.cpp \
     mcpservermanagerwindow.cpp
 
 QTLLM_LIB_DIR = $$clean_path($$OUT_PWD/../../qtllm/lib)

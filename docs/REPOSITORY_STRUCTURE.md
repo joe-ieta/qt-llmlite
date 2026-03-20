@@ -1,39 +1,65 @@
 # Repository Structure
 
-## Top-level
+## Top Level
 
-- `README.md`: project overview and quick start
-- `PROJECT_SPEC.md`: scope, goals, and phased plan
-- `ARCHITECTURE.md`: dependency flow and module boundaries
-- `AI_RULES.md`: coding-agent rules
-- `CODING_GUIDELINES.md`: code conventions
-- `qt-llm.pro`: qmake workspace entry
+- `README.md`
+  - project overview, reading order, and documentation governance
+- `PROJECT_SPEC.md`
+  - current scope, goals, and non-goals
+- `ARCHITECTURE.md`
+  - layering, module responsibilities, and runtime flows
+- `qt-llm.pro`
+  - qmake workspace entry
 
-## Source code
+## Core Source
 
-- `src/qtllm/`: core C++ library
-  - `core/`: client and shared types
+- `src/qtllm/`
+  - `core/`: `QtLLMClient`, config, and base types
+  - `chat/`: conversation clients, factory, and snapshots
+  - `profile/`: profile and memory policy
+  - `storage/`: conversation persistence
   - `providers/`: provider abstraction and implementations
   - `network/`: HTTP execution layer
-  - `streaming/`: chunk/token parser
-- `src/examples/simple_chat/`: minimal Qt Widgets integration example
+  - `streaming/`: stream chunk parsing
+  - `tools/`: tool registry, selection, protocol, execution, and MCP
+  - `logging/`: unified logging entry points and sinks
+  - `toolsinside/`: trace, artifact, query, and admin services
+  - `toolsstudio/`: tool catalog, workspaces, and import/export services
+
+## Applications
+
+- `src/apps/simple_chat/`
+  - minimal chat integration surface
+- `src/apps/multi_client_chat/`
+  - multi-client/session and logging integration
+- `src/apps/mcp_server_manager/`
+  - MCP management and MCP-backed chat
+- `src/apps/tools_inside/`
+  - QML trace browser
+- `src/apps/toolstudio/`
+  - tool catalog and workspace management UI
 
 ## Tests
 
-- `tests/qtllm_tests/`: Qt Test unit-test baseline
+- `tests/qtllm_tests/`
+  - Qt Test baseline for core library behavior
 
 ## Documentation
 
-- `docs/PROJECT_INTRODUCTION.md`: bilingual project introduction
-- `PROJECT_SPEC.md`: requirements and status baseline
-- `docs/DELIVERY_INTEGRATION.md`: deliverables and integration guide
-- `docs/TESTING_BASELINE.md`: testing scope and run instructions
-- `docs/ROADMAP.md`: phased development plan
-- `docs/DECISIONS.md`: key architecture decisions
-- `docs/ABOUT_SNIPPETS.md`: GitHub About text and topic suggestions
-- `docs/i18n/en/`: English documentation set
-- `docs/i18n/zh-CN/`: Chinese documentation set
+- `docs/PROJECT_INTRODUCTION.md`
+- `docs/DELIVERY_INTEGRATION.md`
+- `docs/TESTING_BASELINE.md`
+- `docs/ROADMAP.md`
+- `docs/DECISIONS.md`
+- `docs/releases/`
+- `docs/i18n/`
+  - retained as translation mirrors, no longer the primary entry point
 
-## Supporting assets
+## Runtime Workspace Layout
 
-- `.github/`: issue and PR templates
+The project writes runtime state under `.qtllm/`:
+- `.qtllm/clients/`
+- `.qtllm/mcp/`
+- `.qtllm/tools/`
+- `.qtllm/logs/`
+- `.qtllm/tools_inside/`

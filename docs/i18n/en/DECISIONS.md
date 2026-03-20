@@ -1,19 +1,10 @@
-# DECISIONS / 设计决策
+# Decisions Mirror
 
-## Summary / 摘要
-Key architectural decisions for qt-llmlite.
+Canonical decisions document:
+- [../../DECISIONS.md](../../DECISIONS.md)
 
-## Decision 1: qmake-first
-The baseline uses qmake for smooth Qt Creator onboarding.
-
-## Decision 2: OpenAI-compatible baseline
-Provider abstraction targets widely adopted OpenAI-compatible HTTP formats.
-
-## Decision 3: Local-first support
-The project explicitly supports local/intranet model services (for example Ollama and vLLM).
-
-## Decision 4: Lightweight architecture
-Avoid heavy dependencies in the initial milestones.
-
-## Decision 5: AI-agent-readable repository
-Maintain structured context docs for both human and AI contributors.
+Current key decisions:
+- keep `qtllm` as the architectural center
+- keep provider abstraction first-class
+- treat tool runtime and MCP as baseline architecture
+- keep `logging` and `toolsinside` as separate observability systems

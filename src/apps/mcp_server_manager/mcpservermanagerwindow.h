@@ -1,5 +1,8 @@
 #pragma once
 
+#include "mcpscanlocationrepository.h"
+#include "mcpserverdiscoveryservice.h"
+
 #include "../../qtllm/tools/mcp/defaultmcpclient.h"
 #include "../../qtllm/tools/mcp/mcpservermanager.h"
 
@@ -17,11 +20,12 @@ class SignalLogSink;
 
 class QListWidget;
 class QListWidgetItem;
-class QLineEdit;
-class QComboBox;
-class QTextEdit;
+class QTreeWidget;
+class QTreeWidgetItem;
 class QPushButton;
 class QLabel;
+class QTextEdit;
+class QTabWidget;
 class McpChatWindow;
 
 class McpServerManagerWindow : public QWidget
@@ -40,58 +44,60 @@ private slots:
     void onRegisteredSelectionChanged();
     void onRefreshDetailsClicked();
     void onOpenChatClicked();
+    void onAddScanDirectoryClicked();
+    void onRemoveSelectedScanDirectoryClicked();
+    void onResetScanLocationsClicked();
+    void onToolSelectionChanged();
+    void onResourceSelectionChanged();
+    void onPromptSelectionChanged();
     void onLogEventReceived(const qtllm::logging::LogEvent &event);
 
 private:
     void loadRegisteredServers();
+    void loadScanLocations();
+    void saveScanLocations();
+    void renderScanLocations();
     void renderCandidateList();
     void renderRegisteredList();
+    void renderActions();
 
-    void setSelectedServer(const qtllm::tools::mcp::McpServerDefinition &server);
+    void setSelectedEntry(const McpDiscoveredServerEntry &entry);
     void clearDetails();
-    void refreshDetails(const qtllm::tools::mcp::McpServerDefinition &server);
+    void renderEntryMeta(const McpDiscoveredServerEntry &entry);
+    void renderEntryDetails(const McpDiscoveredServerEntry &entry);
+    void refreshDetailsForSelectedEntry();
+
+    void renderToolTree(const QVector<qtllm::tools::mcp::McpToolDescriptor> &tools);
+    void renderResourceTree(const QVector<qtllm::tools::mcp::McpResourceDescriptor> &resources);
+    void renderPromptTree(const QVector<qtllm::tools::mcp::McpPromptDescriptor> &prompts);
 
     void appendLog(const QString &line);
-    void logInfo(const QString &message, const QJsonObject &fields = QJsonObject()) const;
-    void logWarn(const QString &message, const QJsonObject &fields = QJsonObject()) const;
-    void logError(const QString &message, const QJsonObject &fields = QJsonObject()) const;
+    void rebuildDiscoveryEntries();
 
-    QVector<qtllm::tools::mcp::McpServerDefinition> scanPossibleServers() const;
-    static QVector<qtllm::tools::mcp::McpServerDefinition> parseServersFromJson(const QJsonObject &root);
-
-    static bool maybeAvailable(const qtllm::tools::mcp::McpServerDefinition &server);
-    static qtllm::tools::mcp::McpServerDefinition buildManualServer(const QString &serverId,
-                                                                    const QString &name,
-                                                                    const QString &transport,
-                                                                    const QString &command,
-                                                                    const QString &args,
-                                                                    const QString &url,
-                                                                    const QString &envJson,
-                                                                    const QString &headersJson,
-                                                                    int timeoutMs,
-                                                                    QString *errorMessage);
+    static QString formatServerSummary(const McpDiscoveredServerEntry &entry);
+    static QString formatStatusSummary(const McpDiscoveredServerEntry &entry);
+    static QString compactJson(const QJsonObject &object);
 
 private:
     std::shared_ptr<qtllm::tools::mcp::McpServerManager> m_serverManager;
     std::shared_ptr<qtllm::tools::mcp::IMcpClient> m_mcpClient;
     std::shared_ptr<qtllm::logging::SignalLogSink> m_logSink;
+    std::shared_ptr<McpServerDiscoveryService> m_discoveryService;
+    McpScanLocationRepository m_scanLocationRepository;
+    McpScanLocationConfig m_scanLocationConfig;
 
-    QHash<QString, qtllm::tools::mcp::McpServerDefinition> m_candidateById;
+    QHash<QString, McpDiscoveredServerEntry> m_discoveryById;
     QHash<QString, qtllm::tools::mcp::McpServerDefinition> m_registeredById;
+    QHash<QString, qtllm::tools::mcp::McpServerDefinition> m_manualById;
+
+    QListWidget *m_scanLocationsList;
+    QPushButton *m_addScanDirectoryButton;
+    QPushButton *m_removeScanDirectoryButton;
+    QPushButton *m_resetScanLocationsButton;
+    QPushButton *m_scanButton;
 
     QListWidget *m_candidateList;
-    QPushButton *m_scanButton;
     QPushButton *m_registerButton;
-
-    QLineEdit *m_idEdit;
-    QLineEdit *m_nameEdit;
-    QComboBox *m_transportCombo;
-    QLineEdit *m_commandEdit;
-    QLineEdit *m_argsEdit;
-    QLineEdit *m_urlEdit;
-    QTextEdit *m_envEdit;
-    QTextEdit *m_headersEdit;
-    QLineEdit *m_timeoutEdit;
     QPushButton *m_addManualButton;
 
     QListWidget *m_registeredList;
@@ -100,17 +106,17 @@ private:
 
     QLabel *m_detailTitle;
     QTextEdit *m_detailMeta;
-    QTextEdit *m_toolsView;
-    QTextEdit *m_resourcesView;
-    QTextEdit *m_promptsView;
-    QPushButton *m_refreshDetailsButton;
-
+    QTreeWidget *m_toolsTree;
+    QTextEdit *m_toolSchemaView;
+    QTextEdit *m_toolDescriptionView;
+    QTreeWidget *m_resourcesTree;
+    QTextEdit *m_resourceDetailView;
+    QTreeWidget *m_promptsTree;
+    QTextEdit *m_promptDetailView;
     QTextEdit *m_logView;
+    QPushButton *m_refreshDetailsButton;
+    QTabWidget *m_detailTabs;
 
-    qtllm::tools::mcp::McpServerDefinition m_selectedServer;
-    bool m_hasSelectedServer = false;
+    QString m_selectedServerId;
     QPointer<McpChatWindow> m_chatWindow;
 };
-
-
-
