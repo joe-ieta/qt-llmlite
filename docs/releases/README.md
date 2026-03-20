@@ -1,7 +1,7 @@
 # Release Notes Archive
 
-按版本归档的 release notes 放在这个目录下。
+Release notes are archived in this directory.
 
-当前版本：
-
+Available versions:
+- [v0.2.0](./v0.2.0.md)
 - [v0.1.0](./v0.1.0.md)
