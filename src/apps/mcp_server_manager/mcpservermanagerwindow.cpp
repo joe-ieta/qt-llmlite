@@ -119,7 +119,8 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     , m_promptDetailView(new QTextEdit(this))
     , m_logView(new QTextEdit(this))
     , m_refreshDetailsButton(new QPushButton(QStringLiteral("Refresh Details"), this))
-    , m_detailTabs(new QTabWidget(this))
+    , m_capabilityTabs(new QTabWidget(this))
+    , m_mainTabs(new QTabWidget(this))
 {
     setWindowTitle(QStringLiteral("MCP Server Manager"));
     resize(1560, 940);
@@ -195,22 +196,24 @@ McpServerManagerWindow::McpServerManagerWindow(QWidget *parent)
     leftSplitter->setStretchFactor(1, 2);
     leftSplitter->setStretchFactor(2, 2);
 
-    m_detailTabs->addTab(buildToolTab(m_toolsTree, m_toolSchemaView, m_toolDescriptionView, this), QStringLiteral("Tools"));
-    m_detailTabs->addTab(buildTreeTab(m_resourcesTree, m_resourceDetailView, this), QStringLiteral("Resources"));
-    m_detailTabs->addTab(buildTreeTab(m_promptsTree, m_promptDetailView, this), QStringLiteral("Prompts"));
-    m_detailTabs->addTab(m_logView, QStringLiteral("Logs"));
+    m_capabilityTabs->addTab(buildToolTab(m_toolsTree, m_toolSchemaView, m_toolDescriptionView, this), QStringLiteral("Tools"));
+    m_capabilityTabs->addTab(buildTreeTab(m_resourcesTree, m_resourceDetailView, this), QStringLiteral("Resources"));
+    m_capabilityTabs->addTab(buildTreeTab(m_promptsTree, m_promptDetailView, this), QStringLiteral("Prompts"));
 
-    auto *detailLayout = new QVBoxLayout();
-    detailLayout->addWidget(m_detailTitle);
-    detailLayout->addWidget(m_detailMeta, 1);
-    detailLayout->addWidget(m_refreshDetailsButton);
-    detailLayout->addWidget(m_detailTabs, 3);
-    auto *detailPane = new QWidget(this);
-    detailPane->setLayout(detailLayout);
+    auto *toolsLayout = new QVBoxLayout();
+    toolsLayout->addWidget(m_detailTitle);
+    toolsLayout->addWidget(m_detailMeta, 1);
+    toolsLayout->addWidget(m_refreshDetailsButton);
+    toolsLayout->addWidget(m_capabilityTabs, 3);
+    auto *toolsPane = new QWidget(this);
+    toolsPane->setLayout(toolsLayout);
+
+    m_mainTabs->addTab(toolsPane, QStringLiteral("Tools"));
+    m_mainTabs->addTab(m_logView, QStringLiteral("Logs"));
 
     auto *mainSplitter = new QSplitter(Qt::Horizontal, this);
     mainSplitter->addWidget(leftSplitter);
-    mainSplitter->addWidget(detailPane);
+    mainSplitter->addWidget(m_mainTabs);
     mainSplitter->setStretchFactor(0, 2);
     mainSplitter->setStretchFactor(1, 3);
 
