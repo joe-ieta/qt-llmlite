@@ -1,13 +1,8 @@
-# Testing Baseline / 测试基线
+# 测试基线镜像
 
-## 覆盖范围
-- `ProviderFactory`
-- `OpenAIProvider`
-- `OpenAICompatibleProvider`
-- `StreamChunkParser`
-- MCP 与示例应用当前以手工冒烟测试为主
+当前权威文档：
+- [../../TESTING_BASELINE.md](../../TESTING_BASELINE.md)
 
-## 手工冒烟
-- `simple_chat`
-- `multi_client_chat`
-- `mcp_server_manager_demo`
+当前测试基线：
+- 自动化覆盖 Provider 和流式解析的核心行为
+- 手工冒烟覆盖 tools、MCP、`tools_inside` 和 `toolstudio`

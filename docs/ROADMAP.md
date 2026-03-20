@@ -1,30 +1,32 @@
-# ROADMAP.md
+# Roadmap
 
-## Phase 1: foundation
-- qmake workspace setup
-- core type definitions
+## Phase 1: core baseline
+
 - `QtLLMClient`
-- `ILLMProvider`
-- `OpenAICompatibleProvider`
+- provider abstraction
 - HTTP executor
-- basic example app
+- base chat capability
 
-## Phase 2: conversation and tool runtime
+## Phase 2: conversation and tools
+
+- `ConversationClient` / `ConversationClientFactory`
 - conversation persistence
-- tool registry and built-in tools
-- tool selection and execution loop
-- provider protocol adapters
-- multi-client example UI
+- tool catalog, selection, execution, and failure guard
 
 ## Phase 3: MCP and observability
-- MCP server registry and persistence
-- MCP client bridge and tool sync
-- MCP server manager demo and chat window
-- unified runtime logging with file rotation and UI sink
-- OpenAI `/responses` provider split
 
-## Phase 4: hardening
-- broader automated coverage for MCP and provider edge cases
-- structured tool trace persistence
-- richer log viewers and export helpers
-- stronger policy and permission controls
+- MCP server registry, sync, and execution
+- unified logging
+- `toolsinside` trace and artifact recording
+
+## Phase 4: asset and workspace management
+
+- `toolstudio` workspaces
+- import/export and merge
+- editable tool metadata and placement organization
+
+## Current Branch Focus
+
+- clarify core-library boundaries
+- improve consistency between provider, tool runtime, MCP, and `toolsinside`
+- reduce documentation drift and naming ambiguity

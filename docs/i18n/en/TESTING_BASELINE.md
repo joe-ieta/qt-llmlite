@@ -1,13 +1,8 @@
-# Testing Baseline / Testing Baseline
+# Testing Baseline Mirror
 
-## Scope
-- `ProviderFactory`
-- `OpenAIProvider`
-- `OpenAICompatibleProvider`
-- `StreamChunkParser`
-- manual smoke tests for MCP and example apps
+Canonical testing document:
+- [../../TESTING_BASELINE.md](../../TESTING_BASELINE.md)
 
-## Manual Smoke
-- `simple_chat`
-- `multi_client_chat`
-- `mcp_server_manager_demo`
+Current baseline:
+- automated coverage for core provider and streaming behavior
+- manual smoke coverage for tools, MCP, `tools_inside`, and `toolstudio`

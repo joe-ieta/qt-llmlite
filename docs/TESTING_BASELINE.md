@@ -1,37 +1,31 @@
-# Testing Baseline / 测试基线
+# Testing Baseline
 
-## Summary / 摘要
-This document defines the current unit-test and smoke-test baseline for qt-llmlite.
-本文件定义 qt-llmlite 当前的单元测试与冒烟测试基线。
+## 1. Scope
 
-## Scope / 覆盖范围
-- `ProviderFactory` provider creation mapping
-- `OpenAIProvider`
-  - `/responses` URL/header build
-  - payload JSON build
-  - response parsing
-  - stream delta parsing
-- `OpenAICompatibleProvider`
-  - `/chat/completions` URL/header build
-  - payload JSON build
-  - response parsing
-  - stream token/delta parsing
-- `StreamChunkParser`
-  - fragmented input handling
-  - pending line extraction
-- tool loop and MCP paths currently rely on manual smoke testing
+The current automated tests are concentrated in `tests/qtllm_tests/` and mainly cover:
+- `ProviderFactory` provider mapping
+- `OpenAIProvider` request build and response parsing
+- `OpenAICompatibleProvider` request build and response parsing
+- `StreamChunkParser` fragmented stream handling
 
-## Test Project / 测试工程
-- Path: `tests/qtllm_tests/`
-- Build file: `tests/qtllm_tests/qtllm_tests.pro`
-- Framework: Qt Test (`QT += testlib`)
+`tools`, `MCP`, `toolsinside`, and `toolstudio` still rely primarily on manual smoke validation.
 
-## Run (Qt Creator)
-1. Open `qt-llm.pro`
-2. Build `qtllm`
-3. Build and run `qtllm_tests`
+## 2. Test Project
 
-## Run (Command line, qmake)
+- path: `tests/qtllm_tests/`
+- project file: `tests/qtllm_tests/qtllm_tests.pro`
+- framework: Qt Test
+
+## 3. How to Run
+
+### Qt Creator
+
+1. open `qt-llm.pro`
+2. build `src/qtllm`
+3. build and run `tests/qtllm_tests`
+
+### Command line
+
 ```bash
 qmake qt-llm.pro
 make
@@ -39,24 +33,53 @@ make
 ```
 
 Windows (MSVC example):
+
 ```bat
-call E:\Qt\5.15.2\msvc2019_64\bin\qtenv2.bat
-call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
 qmake qt-llm.pro -spec win32-msvc "CONFIG+=debug"
 nmake /NOLOGO
-.\tests\qtllm_tests\debug\qtllm_tests.exe
+.	ests\qtllm_tests\debug\qtllm_tests.exe
 ```
 
-## Manual Smoke Baseline / 手工冒烟基线
-- `simple_chat`: basic request and provider switch
-- `multi_client_chat`: client/session switching and runtime log filtering
-- `mcp_server_manager_demo`:
-  - MCP server add/remove/persistence
-  - MCP capability detail view (tools/resources/prompts)
-  - MCP tool sync into shared registry
-  - MCP-backed chat with selected tools/schema/request payload inspection
+## 4. Manual Smoke Baseline
 
-## Notes / 说明
-- Network integration tests are not included in this baseline.
-- OpenAI, Ollama, and MCP runtime behavior still require environment-backed smoke tests.
-- This baseline focuses on deterministic tests for core abstractions and documented manual verification for external integrations.
+### `simple_chat`
+
+- basic request sending
+- provider switching
+- streaming and non-streaming responses
+
+### `multi_client_chat`
+
+- client creation and restore
+- session switching
+- history persistence
+- file log output and UI log display
+
+### `mcp_server_manager`
+
+- MCP server scan, add, remove, and persistence
+- capability detail loading
+- MCP tool sync into the shared registry
+- MCP-backed chat path
+
+### `tools_inside`
+
+- workspace selection
+- client/session/trace list loading
+- timeline, tool-call, and artifact display
+- archive and purge actions
+
+### `toolstudio`
+
+- tool catalog loading
+- workspace create/open/remove
+- category tree and placement editing
+- import, export, and merge preview
+
+## 5. Current Testing Conclusion
+
+The current testing strategy is still "core library automation + subsystem smoke verification". As the core library is strengthened further, the highest-value next automation targets are:
+- tool-loop branches and failure guard
+- MCP sync and execution routing
+- `toolsinside` recording consistency
+- `toolstudio` persistence and import/export behavior

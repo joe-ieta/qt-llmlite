@@ -1,86 +1,117 @@
-# Delivery and Integration / 交付与集成说明
+# Delivery and Integration
 
-## Summary / 摘要
-This document defines deliverables and integration paths for qt-llmlite.
-本文件定义 qt-llmlite 的交付物与集成路径。
+## 1. Deliverables
 
-## 1. Deliverables / 交付物
+The repository currently delivers three major asset types.
 
 ### 1.1 Core Library
-- Source path: `src/qtllm/`
-- Build output: static library (`qtllm.lib` on MSVC, `libqtllm.a` on MinGW/Linux)
-- Public capability:
-  - `QtLLMClient`
-  - provider abstraction (`ILLMProvider`)
-  - provider factory (`ProviderFactory`)
-  - async HTTP execution with timeout/retry/cancel
-  - streaming token and stream-delta handling
-  - canonical tool registry and tool loop
-  - MCP server registry and tool sync API
-  - structured logging API
 
-### 1.2 Example Applications
-- `src/examples/simple_chat/`: basic provider integration reference
-- `src/examples/multi_client_chat/`: multi-client, session history, runtime log view
-- `src/examples/mcp_server_manager_demo/`: MCP server management and MCP-backed chat demo
+- path: `src/qtllm/`
+- output: `qtllm` static library
+- capabilities:
+  - base LLM request orchestration
+  - conversation persistence
+  - tool runtime
+  - MCP integration
+  - logging and trace analysis
+
+### 1.2 Application Entry Points
+
+- `src/apps/simple_chat/`
+- `src/apps/multi_client_chat/`
+- `src/apps/mcp_server_manager/`
+- `src/apps/tools_inside/`
+- `src/apps/toolstudio/`
+
+These applications are both integration references and subsystem hosts. They should no longer be described as a generic `examples/` area.
 
 ### 1.3 Documentation
-- Architecture, spec, roadmap, release checklist, testing baseline
-- English docs: `docs/i18n/en/`
-- Chinese docs: `docs/i18n/zh-CN/`
 
-## 2. Integration Modes / 集成方式
+Primary docs:
+- `README.md`
+- `PROJECT_SPEC.md`
+- `ARCHITECTURE.md`
+- `docs/REPOSITORY_STRUCTURE.md`
+- `docs/TESTING_BASELINE.md`
 
-### Mode A: Source-level integration
-1. Copy `src/qtllm/` into your repository.
-2. Add `qtllm.pro` as a subproject or include sources directly.
-3. Link against Qt modules: `core`, `network`, and `widgets` when using example-style UI helpers.
-4. Initialize `QtLLMClient` or `ConversationClient`, set config/provider, then send requests asynchronously.
+## 2. Integration Modes
 
-### Mode B: Library artifact integration
-1. Build `qtllm` static library in CI or local environment.
-2. Export public headers from `src/qtllm/`.
-3. Consume library + headers in the business project.
-4. Keep ABI/compiler settings aligned with the consumer project.
+### Mode A: source-level integration
 
-## 3. Minimal Integration Contract / 最小集成契约
-- Required Qt modules for core library: `QT += core network`
-- Add `QT += widgets` for the example-style UI surfaces
-- C++ standard: C++17
-- Build system baseline: qmake
-- Runtime contract:
-  - provide `baseUrl`, `model`, and `providerName`
-  - provide `apiKey` when the selected provider requires authorization
+Suitable when the consumer wants to evolve with the repository and keep direct access to the library sources.
 
-## 4. Provider Selection Contract / Provider 选择约定
-- `openai` -> `OpenAIProvider`
-- `openai-compatible` -> `OpenAICompatibleProvider`
-- `ollama` -> `OllamaProvider`
-- `vllm` -> `VllmProvider`
-- `sglang`, `anthropic`, `google`, `gemini`, `deepseek`, `qwen`, `glm`, `zhipu` -> `OpenAICompatibleProvider`
+Basic path:
+1. include `src/qtllm/`
+2. add `src/qtllm/qtllm.pro` into the workspace
+3. link the required Qt modules
+4. construct `QtLLMClient` or `ConversationClient` in the host app
 
-## 5. Request and Tool Contract / 请求与工具约定
-- `OpenAIProvider` targets `/responses`
-- `OpenAICompatibleProvider` targets `/chat/completions`
-- Canonical tool identity is split into:
-  - `toolId`: internal routing and persistence
-  - `invocationName`: provider-visible function name
-  - `name`: display name
-- MCP-imported tools are registered into the same shared tool registry as built-in tools
+### Mode B: library-level integration
 
-## 6. Logging Contract / 日志约定
-- Logger entry point: `QtLlmLogger`
-- File sink: `FileLogSink`
-- UI sink: `SignalLogSink`
-- Default storage location: workspace `.qtllm/logs/<clientId>/`
-- Encoding: UTF-8 JSONL
-- Rotation: size-based, pruned by per-client file-count limit
+Suitable when `qtllm` is built and distributed as a standalone static library.
 
-## 7. Recommended Release Checklist / 推荐发布检查项
-1. Build on Windows and Linux.
-2. Validate non-streaming and streaming calls.
-3. Validate timeout/retry/cancel behavior.
-4. Verify provider selection and provider-specific endpoint path.
-5. Verify MCP server persistence and tool sync.
-6. Verify per-client log rotation and UI log delivery.
-7. Update `PROJECT_SPEC.md`, `ARCHITECTURE.md`, and release checklist when scope changes.
+Basic path:
+1. build `qtllm`
+2. export public headers and the static library artifact
+3. link them from the business project
+
+## 3. Minimal Integration Surface
+
+### Base chat
+
+Minimal requirements:
+- `QtLLMClient`
+- `LlmConfig`
+- one `ILLMProvider` implementation
+
+Minimal config:
+- `providerName`
+- `baseUrl`
+- `model`
+- `apiKey` when required by the provider
+
+### Conversation layer
+
+For multi-client and multi-session usage:
+- `ConversationClient`
+- `ConversationClientFactory`
+- `ConversationRepository`
+
+### Tool layer
+
+For tool calling:
+- `ToolEnabledChatEntry`
+- `LlmToolRegistry`
+- `ToolExecutionLayer`
+- `ToolCallOrchestrator`
+
+### MCP layer
+
+For MCP support:
+- `McpServerManager`
+- `McpServerRegistry`
+- `McpToolSyncService`
+- `IMcpClient`
+
+## 4. Workspace Data Contract
+
+Default workspace layout:
+
+```text
+.qtllm/
+  clients/
+  logs/
+  mcp/
+  tools/
+  tools_inside/
+```
+
+Many runtime capabilities assume a workspace root. Consumers embedding the library should therefore make the workspace root explicit instead of relying entirely on the process working directory.
+
+## 5. Integration Suggestions Inside This Repository
+
+- use `simple_chat` to validate provider setup and base request flow
+- use `multi_client_chat` to validate persistence and logging
+- use `mcp_server_manager` to validate MCP registration, sync, and execution
+- use `tools_inside` to validate trace and artifact recording
+- use `toolstudio` to validate tool asset management
