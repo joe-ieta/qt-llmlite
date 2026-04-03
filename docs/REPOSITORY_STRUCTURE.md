@@ -3,63 +3,70 @@
 ## Top Level
 
 - `README.md`
-  - project overview, reading order, and documentation governance
-- `PROJECT_SPEC.md`
-  - current scope, goals, and non-goals
-- `ARCHITECTURE.md`
-  - layering, module responsibilities, and runtime flows
+  - repository entry point
 - `qt-llm.pro`
   - qmake workspace entry
+- `docs/`
+  - project, developer, release, and agent documentation
+- `src/`
+  - library, apps, and business agents
+- `tests/`
+  - automated tests
 
-## Core Source
+## Reusable Library
 
 - `src/qtllm/`
-  - `core/`: `QtLLMClient`, config, and base types
-  - `chat/`: conversation clients, factory, and snapshots
-  - `profile/`: profile and memory policy
-  - `storage/`: conversation persistence
-  - `providers/`: provider abstraction and implementations
-  - `network/`: HTTP execution layer
-  - `streaming/`: stream chunk parsing
-  - `tools/`: tool registry, selection, protocol, execution, and MCP
-  - `logging/`: unified logging entry points and sinks
-  - `toolsinside/`: trace, artifact, query, and admin services
-  - `toolsstudio/`: tool catalog, workspaces, and import/export services
+  - reusable Qt/C++ LLM integration library
+  - core request flow, provider layer, storage, tools, MCP, logging, and observability support
 
-## Applications
+## Host and Demo Applications
 
-- `src/apps/simple_chat/`
-  - minimal chat integration surface
-- `src/apps/multi_client_chat/`
-  - multi-client/session and logging integration
-- `src/apps/mcp_server_manager/`
-  - MCP management and MCP-backed chat
-- `src/apps/tools_inside/`
-  - QML trace browser
-- `src/apps/toolstudio/`
-  - tool catalog and workspace management UI
+- `src/apps/`
+  - infrastructure and demo hosts built on top of `qtllm`
+  - current examples include chat, MCP management, tools-inside, and toolstudio applications
+
+## Business Agents
+
+- `src/agents/`
+  - business-agent applications built on the shared library layer
+
+- `src/agents/pdf_translator_agent/`
+  - current validation agent for:
+    - skill-based workflow composition
+    - per-skill model routing
+    - MCP-backed business-agent integration
+    - fragment, document, and batch task flows
 
 ## Tests
 
 - `tests/qtllm_tests/`
-  - Qt Test baseline for core library behavior
+  - core library test baseline
 
 ## Documentation
 
 - `docs/PROJECT_INTRODUCTION.md`
+  - high-level repository positioning
 - `docs/DELIVERY_INTEGRATION.md`
+  - delivery and integration notes
 - `docs/TESTING_BASELINE.md`
+  - current testing expectations
 - `docs/ROADMAP.md`
+  - current phased direction
 - `docs/DECISIONS.md`
+  - architectural decisions
 - `docs/developer-guide/`
-  - 面向 `qtllm` API 使用者的开发手册
+  - developer-facing guide for `qtllm`
+- `docs/agents/`
+  - current business-agent status, checklists, release notes, and archived design docs
 - `docs/releases/`
+  - repository release note archive
 - `docs/i18n/`
-  - retained as translation mirrors, no longer the primary entry point
+  - translated document mirrors, no longer the primary entry point
 
-## Runtime Workspace Layout
+## Runtime Workspace
 
-The project writes runtime state under `.qtllm/`:
+The repository writes runtime state under `.qtllm/`, including:
+
 - `.qtllm/clients/`
 - `.qtllm/mcp/`
 - `.qtllm/tools/`

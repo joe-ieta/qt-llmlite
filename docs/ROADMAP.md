@@ -25,8 +25,15 @@
 - import/export and merge
 - editable tool metadata and placement organization
 
-## Current Branch Focus
+## Phase 5: business-agent validation
 
-- clarify core-library boundaries
-- improve consistency between provider, tool runtime, MCP, and `toolsinside`
-- reduce documentation drift and naming ambiguity
+- validate independent business-agent development under `src/agents/`
+- validate skill-oriented workflow composition over the shared `qtllm` base
+- validate per-skill model routing and MCP-backed workflow integration
+
+## Current Focus
+
+- keep `src/qtllm` as reusable infrastructure
+- keep `src/apps` as host/demo surfaces
+- use `src/agents` for business-agent validation and future product applications
+- reduce documentation drift between implementation state and historical design notes
